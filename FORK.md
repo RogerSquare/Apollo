@@ -132,9 +132,9 @@ While a device with touch mode is streaming to a virtual display (not while paus
   relative to the display's recommended step; clamped to what Windows allows for that resolution,
   e.g. 175% max at 1080p)
 - taskbar: search box -> search icon, Task View hidden (`WM_SETTINGCHANGE "TraySettings"` applies it live)
-- touch keyboard opens on tap even with a keyboard attached (`TabletTip.7` TouchKeyboardTapInvoke=2)
+- touch keyboard opens on tap even with a keyboard attached (`TabletTip\1.7` TouchKeyboardTapInvoke=2)
 
-Originals go to `%LOCALAPPDATA%\ApolloTray	ouch-restore.json` before anything changes and are put back
+Originals go to `%LOCALAPPDATA%\ApolloTray\touch-restore.json` before anything changes and are put back
 when the stream stops or touch mode is turned off; a leftover file (crash, reboot) is restored on the
 next tray start. Scaling is restored live if the display still exists, otherwise in
 `HKCU\Control Panel\Desktop\PerMonitorSettings`.
