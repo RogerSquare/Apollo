@@ -106,6 +106,9 @@ right-click a native menu. Talks to Apollo only through the local token API abov
   tile (on = `primary`, off = `exclusive`) and **Desk audio** tile (`mute_wavelink`, acted on by Handoff).
   While something runs the tiles change the session live and save it for that device; when idle they
   set the global defaults. Pair a device: PIN + name -> `POST /api/pin`.
+- When a device connects the flyout opens by itself on the **streamed display** (from `app.display_name`
+  in `/api/session`, placed per monitor in pixels), so it can be adjusted from the device; it closes
+  after 15 s unless used. Toggle: menu > "Show when a device connects" (HKCU\Software\ApolloTray).
 - Menu: the same two toggles, Disconnect, Open Apollo settings, Start with Windows, Quit.
 - Log: `%LOCALAPPDATA%\ApolloTray\apollotray.log`. Re-launching the exe opens the flyout; `--menu` opens the menu.
 
