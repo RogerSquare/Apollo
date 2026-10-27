@@ -258,6 +258,9 @@ namespace nvhttp {
         if (named_cert_p->host_policy.mute_wavelink) {
           named_cert_node["host_mute_wavelink"] = host_policy::override_bool_to_string(named_cert_p->host_policy.mute_wavelink);
         }
+        if (named_cert_p->last_seen) {
+          named_cert_node["last_seen"] = named_cert_p->last_seen;
+        }
 
         // Add "do" commands if available.
         if (!named_cert_p->do_cmds.empty()) {
@@ -357,6 +360,7 @@ namespace nvhttp {
         named_cert_p->always_use_virtual_display = el.value("always_use_virtual_display", false);
         named_cert_p->host_policy.display = host_policy::override_display_from_string(el.value("host_display", ""));
         named_cert_p->host_policy.mute_wavelink = host_policy::override_bool_from_string(el.value("host_mute_wavelink", ""));
+        named_cert_p->last_seen = util::get_non_string_json_value<std::int64_t>(el, "last_seen", 0);
         // Load command entries for "do" and "undo" keys.
         named_cert_p->do_cmds = extract_command_entries(el, "do");
         named_cert_p->undo_cmds = extract_command_entries(el, "undo");
@@ -463,6 +467,7 @@ namespace nvhttp {
     launch_session->unique_id = named_cert_p->uuid;
     // Web UI launches use the host's own uuid, which resolves to the global default.
     launch_session->host_policy = effective_host_policy(named_cert_p->uuid);
+    touch_device(named_cert_p->uuid);
     BOOST_LOG(info) << "Host policy for client ["sv << launch_session->device_name << "]: display="sv
                     << host_policy::to_string(launch_session->host_policy.display)
                     << ", mute_wavelink="sv << launch_session->host_policy.mute_wavelink;
@@ -1041,6 +1046,7 @@ namespace nvhttp {
       named_cert_node["always_use_virtual_display"] = named_cert->always_use_virtual_display;
       named_cert_node["host_display"] = host_policy::override_display_to_string(named_cert->host_policy.display);
       named_cert_node["host_mute_wavelink"] = host_policy::override_bool_to_string(named_cert->host_policy.mute_wavelink);
+      named_cert_node["last_seen"] = named_cert->last_seen;
 
       // Add "do" commands if available
       if (!named_cert->do_cmds.empty()) {
@@ -1864,6 +1870,16 @@ namespace nvhttp {
       }
     }
     return false;
+  }
+
+  void touch_device(const std::string &uuid) {
+    for (auto &named_cert_p : client_root.named_devices) {
+      if (named_cert_p->uuid == uuid) {
+        named_cert_p->last_seen = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        save_state();
+        return;
+      }
+    }
   }
 
   std::optional<host_policy::override_t> device_host_policy(const std::string &uuid) {

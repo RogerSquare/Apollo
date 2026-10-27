@@ -122,12 +122,15 @@ h4, .h4, h5, .h5 { font-size: 14px; font-weight: 600; }
   overflow-y: auto;
 }
 
+/* The nav's space is padding inside a full-width container (a margin plus a fixed width would
+   overflow narrow windows), and the content column stops at 1080px. */
 body > .container,
 body > #content,
 body > .container-fluid {
-  max-width: 1080px;
-  margin: 0 0 0 var(--fl-nav-width);
-  padding: 28px 40px 48px;
+  width: auto;
+  max-width: calc(var(--fl-nav-width) + 1080px + 80px);
+  margin: 0;
+  padding: 28px 40px 48px calc(var(--fl-nav-width) + 40px);
 }
 
 @media (max-width: 900px) {

@@ -5,206 +5,288 @@
   <%- header %>
 
   <script type="text/javascript" src="/assets/js/qrcode.min.js"></script>
-  <style scoped type="text/css">
-    .content-container {
-      padding-top: 2em;
-    }
-
-    .pin-tab-bar {
-      margin-bottom: 2em !important;
-    }
+  <style>
+    .dev { display: flex; flex-direction: column; gap: 28px; }
+    .dev-head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+    .seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--fl-radius); border: 1px solid var(--fl-stroke); background: var(--fl-card-2); }
+    .seg button { height: 28px; padding: 0 14px; border: none; border-radius: 3px; background: transparent; color: var(--fl-text-2); font: inherit; font-size: 13px; cursor: pointer; }
+    .seg button[aria-pressed=true] { background: var(--fl-accent-fill); color: var(--fl-on-accent); font-weight: 600; }
+    .row-icon { width: 20px; flex: none; color: var(--fl-text); }
+    .exp { background: var(--fl-card); border: 1px solid var(--fl-stroke); border-radius: var(--fl-radius-card); }
+    .exp-head { width: 100%; display: flex; align-items: center; gap: 16px; min-height: 68px; padding: 12px 20px; border: none; background: transparent; color: var(--fl-text); font: inherit; text-align: left; cursor: pointer; border-radius: var(--fl-radius-card); }
+    .exp-head:hover { background: var(--fl-card-2); }
+    .exp-chev { transition: transform .15s ease; }
+    .exp-head[aria-expanded=true] .exp-chev { transform: rotate(180deg); }
+    .exp-body { border-top: 1px solid var(--fl-stroke); }
+    .exp-row { display: flex; align-items: center; gap: 16px; min-height: 60px; box-sizing: border-box; padding: 10px 20px 10px 56px; border-bottom: 1px solid var(--fl-stroke); flex-wrap: wrap; }
+    .exp-row:last-child { border-bottom: none; }
+    .exp-row .fl-row-text { flex: 1 1 240px; }
+    /* Bootstrap makes inputs width:100%, which pushes them under their label; keep them on the right */
+    .exp-row .exp-ctl { flex: 0 1 280px; width: 280px; min-width: 180px; }
+    .perm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; width: 100%; padding: 4px 0 6px; }
+    .perm-grid h4 { font-size: 12px; font-weight: 600; color: var(--fl-text-2); margin: 0 0 6px; text-transform: none; }
+    .perm-grid .form-check { margin-bottom: 4px; }
+    .cmd-list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+    .cmd-item { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .cmd-item .form-control { flex: 1 1 260px; font-family: Consolas, 'Cascadia Mono', monospace; }
+    .otp-code { font-family: var(--fl-font-display); font-size: 40px; font-weight: 600; letter-spacing: 6px; line-height: 1; }
+    #qrRef > div { display: inline-block; padding: 8px; background: #fff; border-radius: var(--fl-radius); }
+    .danger-link { background: none; border: none; color: var(--fl-danger); font: inherit; font-size: 14px; padding: 0; cursor: pointer; }
+    .status-ok { color: var(--fl-success); }
+    .status-bad { color: var(--fl-danger); }
   </style>
 </head>
 
 <body id="app" v-cloak>
   <Navbar></Navbar>
-  <div id="content" class="container content-container d-flex flex-column align-items-center">
-    <ul class="nav nav-pills pin-tab-bar justify-content-center">
-      <li class="nav-item">
-        <a class="nav-link" :class="{active: currentTab !== '#PIN'}" href="#OTP" @click.prevent="switchTab('OTP')">{{ $t('pin.otp_pairing') }}</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" :class="{active: currentTab === '#PIN'}" href="#PIN" @click.prevent="switchTab('PIN')">{{ $t('pin.pin_pairing') }}</a>
-      </li>
-    </ul>
-    <form v-if="currentTab === '#PIN'" class="form d-flex flex-column align-items-center" id="form" @submit.prevent="registerDevice">
-      <div class="card flex-column d-flex p-4 mb-4">
-        <input type="text" pattern="\d*" :placeholder="`${$t('navbar.pin')}`" autofocus id="pin-input" class="form-control mt-2" required />
-        <input type="text" :placeholder="`${$t('pin.device_name')}`" id="name-input" class="form-control my-4" />
-        <button class="btn btn-primary">{{ $t('pin.send') }}</button>
+  <div id="content" class="container dev">
+    <div class="dev-head">
+      <div style="flex: 1 1 300px;">
+        <h1 class="m-0">{{ $t('fork.nav_devices') }}</h1>
+        <p class="fl-muted mt-1 mb-0">{{ $t('fork.devices_desc') }}</p>
       </div>
-      <div id="status"></div>
-    </form>
-    <form v-else class="form d-flex flex-column align-items-center" @submit.prevent="requestOTP">
-      <div class="card flex-column d-flex p-4 mb-4">
-        <div v-show="editingHost || (otp && hostAddr)" id="qrRef"></div>
-        <p v-if="editingHost || (otp && hostAddr)" class="text-center text-secondary"><a class="text-secondary" :href="deepLink">art://{{ hostAddr }}:{{ hostPort }}</a> <i class="fas fa-fw fa-pen-to-square" @click="editHost"></i></p>
-        <h1 class="mb-4 text-center">{{ otp && otp || '????' }}</h1>
-        <div v-if="editingHost" class="d-flex flex-column align-items-stretch">
-          <input type="text" placeholder="HOST" v-model="hostAddr" autofocus class="form-control mt-2" />
-          <input type="text" placeholder="PORT" v-model="hostPort" class="form-control my-4" />
-          <button class="btn btn-primary" :disabled="!this.canSaveHost" @click.prevent="saveHost">{{ $t('_common.save') }}</button>
-        </div>
-        <div v-else class="d-flex flex-column align-items-stretch">
-          <input type="text" pattern="[0-9a-zA-Z]{4,}" :placeholder="`${$t('pin.otp_passphrase')}`" v-model="passphrase" required autofocus class="form-control mt-2" />
-          <input type="text" :placeholder="`${$t('pin.device_name')}`" v-model="deviceName" class="form-control my-4" />
-          <button class="btn btn-primary">{{ $t('pin.generate_pin') }}</button>
-        </div>
-      </div>
-      <div v-if="otpMessage" class="alert" :class="['alert-' + otpStatus]">{{ otpMessage }}</div>
-      <div class="alert alert-info">{{ $t('pin.otp_msg') }}</div>
-    </form>
-    <div class="alert alert-warning">
-      <b>{{ $t('_common.warning') }}</b> {{ $t('pin.warning_msg') }}
     </div>
-    <!-- Manage Clients -->
-    <div class="card my-4 align-self-stretch">
-      <div class="card-body">
-        <div class="p-2">
-          <div class="d-flex justify-content-end align-items-center">
-            <h2 id="unpair" class="me-auto">{{ $t('pin.device_management') }}</h2>
-            <button class="btn btn-danger" :disabled="unpairAllPressed" @click="unpairAll">
-              {{ $t('pin.unpair_all') }}
-            </button>
-          </div>
-          <br />
-          <p class="mb-0">{{ $t('pin.device_management_desc') }}</p>
-          <p class="mb-0">{{ $t('pin.device_management_warning') }} <a href="https://github.com/ClassicOldSong/Apollo/wiki/Permission-System" target="_blank">{{ $t('_common.learn_more') }}</a></p>
-          <div id="apply-alert" class="alert alert-success d-flex align-items-center mt-3" :style="{ 'display': (showApplyMessage ? 'flex !important': 'none !important') }">
-            <div class="me-2"><b>{{ $t('_common.success') }}</b> {{ $t('pin.unpair_single_success') }}</div>
-            <button class="btn btn-success ms-auto apply" @click="clickedApplyBanner">{{ $t('_common.dismiss') }}</button>
-          </div>
-          <div class="alert alert-success mt-3" v-if="unpairAllStatus === true">
-            {{ $t('pin.unpair_all_success') }}
-          </div>
-          <div class="alert alert-danger mt-3" v-if="unpairAllStatus === false">
-            {{ $t('pin.unpair_all_error') }}
-          </div>
+
+    <!-- Pair a device -->
+    <section class="fl-group mb-0" id="pair" aria-labelledby="pair-h">
+      <h2 id="pair-h">{{ $t('fork.pair_device') }}</h2>
+      <div class="fl-row">
+        <svg class="row-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M8 12a4 4 0 0 1 0-5.7l2.3-2.2a4 4 0 0 1 5.6 5.6L14.5 11"/><path d="M12 8a4 4 0 0 1 0 5.7l-2.3 2.2a4 4 0 0 1-5.6-5.6L5.5 9"/></svg>
+        <div class="fl-row-text">
+          <div class="fl-row-title">{{ $t('fork.pair_method') }}</div>
+          <div class="fl-row-desc">{{ tab === 'PIN' ? $t('fork.pin_method_desc') : $t('pin.otp_msg') }}</div>
+        </div>
+        <div class="seg" role="group" :aria-label="$t('fork.pair_method')">
+          <button type="button" :aria-pressed="tab === 'PIN' ? 'true' : 'false'" @click="switchTab('PIN')">PIN</button>
+          <button type="button" :aria-pressed="tab === 'OTP' ? 'true' : 'false'" @click="switchTab('OTP')">{{ $t('fork.otp_short') }}</button>
         </div>
       </div>
-      <ul id="client-list" class="list-group list-group-flush list-group-item-light" v-if="clients && clients.length > 0">
-        <template v-for="client in clients" class="list-group-item d-flex align-items-center">
-          <div v-if="client.editing" class="list-group-item d-flex align-items-stretch flex-column">
-            <div class="d-flex align-items-center">
-              <div class="p-2 flex-grow-1 d-flex align-items-center">
-                <span class="badge" :class="client.editPerm >= 0x04000000 ? 'bg-danger' : 'bg-primary'">
-                  [ {{permToStr(client.editPerm)}} ]
-                </span>
-                &nbsp;
-                <input v-model="client.editName" @keyup.enter="saveClient(client)" class="form-control flex-grow-1" type="text" :placeholder="$t('pin.device_name')">
-              </div>
-              <div class="me-2 btn btn-success" @click="saveClient(client)"><i class="fas fa-check"></i></div>
-              <div class="me-2 btn btn-secondary" @click="cancelEdit(client)"><i class="fas fa-times"></i></div>
-            </div>
-            <div class="align-items-top d-flex flex-row justify-content-center">
-              <div v-for="group in permissionGroups" class="d-flex flex-column mx-2">
-                <div class="mx-2">{{ group.name }}:</div>
-                <button v-for="perm in group.permissions" class="my-1 btn btn-sm" :disabled="isSuppressed(client.editPerm, perm.name, perm.suppressed_by)" :class="(isSuppressed(client.editPerm, perm.name, perm.suppressed_by) || checkPermission(client.editPerm, perm.name)) ? 'btn-success' : 'btn-outline-secondary'" @click="togglePermission(client, perm.name)">
-                  {{ $t(`permissions.${perm.name}`) }}
-                </button>
-              </div>
-            </div>
 
-            <!-- Enable legacy ordering -->
-            <Checkbox class="mb-3"
-                      id="enable_legacy_ordering"
-                      label="pin.enable_legacy_ordering"
-                      desc="pin.enable_legacy_ordering_desc"
-                      v-model="client.editEnableLegacyOrdering"
-                      default="true"
-            ></Checkbox>
+      <!-- PIN: the device shows a PIN, enter it here -->
+      <form v-if="tab === 'PIN'" class="fl-row" @submit.prevent="registerDevice">
+        <div class="d-flex gap-2 flex-wrap align-items-center" style="flex: 1 1 auto; padding-left: 36px;">
+          <label class="fl-sr" for="pin-input">PIN</label>
+          <input id="pin-input" class="form-control text-center" style="width: 90px;" inputmode="numeric" pattern="\d{4}" maxlength="4" placeholder="PIN" v-model="pin" required autofocus>
+          <label class="fl-sr" for="name-input">{{ $t('pin.device_name') }}</label>
+          <input id="name-input" class="form-control" style="flex: 1 1 200px; width: auto; min-width: 0;" :placeholder="$t('pin.device_name')" v-model="pinName">
+          <button type="submit" class="btn btn-primary" :disabled="!/^\d{4}$/.test(pin)">{{ $t('fork.pair') }}</button>
+          <div class="w-100" role="status" style="font-size: 13px;" :class="pinStatusOk === true ? 'status-ok' : pinStatusOk === false ? 'status-bad' : 'fl-muted'">{{ pinStatus }}</div>
+        </div>
+      </form>
 
-            <!-- Always Use Virtual Display -->
-            <Checkbox class="mb-3"
-                      id="always_use_virtual_display"
-                      label="pin.always_use_virtual_display"
-                      desc="pin.always_use_virtual_display_desc"
-                      v-model="client.editAlwaysUseVirtualDisplay"
-                      default="false"
-                      v-if="platform === 'windows'"
-            ></Checkbox>
-            <!-- Display Mode Override -->
-            <div class="mb-3 mt-2">
-              <label for="display_mode_override" class="form-label">{{ $t('pin.display_mode_override') }}</label>
-              <input
-                type="text"
-                class="form-control"
-                id="display_mode_override"
-                v-model="client.editDisplayMode"
-                placeholder="1920x1080x59.94"
-                @input="validateModeOverride"
-              />
-              <div class="form-text">{{ $t('pin.display_mode_override_desc') }} <a href="https://github.com/ClassicOldSong/Apollo/wiki/Display-Mode-Override" target="_blank">{{ $t('_common.learn_more') }}</a></div>
+      <!-- OTP: generate a code (and QR/deep link) the Artemis client enters -->
+      <form v-else class="fl-row" @submit.prevent="requestOTP">
+        <div class="d-flex gap-4 flex-wrap align-items-center" style="flex: 1 1 auto; padding-left: 36px;">
+          <div class="d-flex flex-column gap-2" style="flex: 1 1 280px; min-width: 0;">
+            <div v-if="!editingHost" class="d-flex gap-2 flex-wrap">
+              <label class="fl-sr" for="otp-pass">{{ $t('pin.otp_passphrase') }}</label>
+              <input id="otp-pass" class="form-control" style="flex: 1 1 160px; width: auto;" pattern="[0-9a-zA-Z]{4,}" :placeholder="$t('pin.otp_passphrase')" v-model="passphrase" required>
+              <label class="fl-sr" for="otp-name">{{ $t('pin.device_name') }}</label>
+              <input id="otp-name" class="form-control" style="flex: 1 1 160px; width: auto;" :placeholder="$t('pin.device_name')" v-model="deviceName">
+              <button type="submit" class="btn btn-primary">{{ $t('pin.generate_pin') }}</button>
             </div>
-
-            <!-- Allow client commands -->
-            <Checkbox class="mb-3"
-                      id="allow_client_commands"
-                      label="pin.allow_client_commands"
-                      desc="pin.allow_client_commands_desc"
-                      v-model="client.editAllowClientCommands"
-                      default="true"
-            ></Checkbox>
-
-            <!-- connect/disconnect commands -->
-            <div class="mb-3 mt-2 d-flex flex-column" v-for="cmdType in ['do', 'undo']" v-if="client.editAllowClientCommands">
-              <label class="mb-0 orm-label">{{ $t(`pin.client_${cmdType}_cmd`) }}</label>
-              <div class="form-text">{{ $t(`pin.client_${cmdType}_cmd_desc`) }} <a href="https://github.com/ClassicOldSong/Apollo/wiki/Client-Commands" target="_blank">{{ $t('_common.learn_more') }}</a></div>
-              <table class="mt-2 table" v-if="client[`edit_${cmdType}`].length > 0">
-                <thead>
-                  <tr>
-                    <th style="width: 80%"><i class="fas fa-terminal"></i> {{ $t('_common.cmd_val') }}</th>
-                    <th style="min-width: 10em; max-width: 12em;" v-if="platform === 'windows'">
-                      <i class="fas fa-shield-alt"></i> {{ $t('_common.run_as') }}
-                    </th>
-                    <th style="min-width: 110px;"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                <tr v-for="(c, i) in client[`edit_${cmdType}`]">
-                  <td>
-                    <input type="text" class="form-control monospace" v-model="c.cmd" />
-                  </td>
-                  <td v-if="platform === 'windows'">
-                    <div class="form-check">
-                      <input type="checkbox" class="form-check-input" :id="`client-${cmdType}-cmd-admin-${i}`" v-model="c.elevated"/>
-                      <label :for="`client-${cmdType}-cmd-admin-${i}`" class="form-check-label">{{ $t('_common.elevated') }}</label>
-                    </div>
-                  </td>
-                  <td>
-                    <button class="btn btn-danger me-2" @click="removeCmd(client[`edit_${cmdType}`], i)">
-                      <i class="fas fa-trash"></i>
-                    </button>
-                    <button class="btn btn-success" @click="addCmd(client[`edit_${cmdType}`], i)">
-                      <i class="fas fa-plus"></i>
-                    </button>
-                  </td>
-                </tr>
-                </tbody>
-              </table>
-              <button class="ms-0 mt-2 btn btn-success" style="margin: 0 auto" @click="addCmd(client[`edit_${cmdType}`], -1)">
-                &plus; {{ $t('config.add') }}
-              </button>
+            <div v-else class="d-flex gap-2 flex-wrap">
+              <label class="fl-sr" for="otp-host">Host</label>
+              <input id="otp-host" class="form-control" style="flex: 1 1 200px; width: auto;" placeholder="HOST" v-model="hostAddr">
+              <label class="fl-sr" for="otp-port">Port</label>
+              <input id="otp-port" class="form-control" style="width: 110px;" placeholder="PORT" v-model="hostPort">
+              <button type="button" class="btn btn-primary" :disabled="!canSaveHost" @click="saveHost">{{ $t('_common.save') }}</button>
             </div>
+            <div v-if="otpMessage" role="status" style="font-size: 13px;" :class="otpStatus === 'success' ? 'status-ok' : 'status-bad'">{{ otpMessage }}</div>
           </div>
-          <div v-else class="list-group-item d-flex align-items-center">
-            <div class="p-2 flex-grow-1 d-flex align-items-center">
-              <span class="badge" :class="client.perm >= 0x04000000 ? 'bg-danger' : 'bg-primary'">
-                [ {{permToStr(client.perm)}} ]
+          <div v-show="otp" class="d-flex align-items-center gap-3">
+            <div v-show="editingHost || (otp && hostAddr)" id="qrRef"></div>
+            <div class="d-flex flex-column gap-1">
+              <span class="otp-code" aria-live="polite">{{ otp }}</span>
+              <span v-if="otp && hostAddr" class="fl-caption">
+                <a :href="deepLink">art://{{ hostAddr }}:{{ hostPort }}</a>
+                · <button type="button" class="btn btn-link p-0 align-baseline" style="font-size: 12px;" @click="editHost">{{ $t('fork.edit') }}</button>
               </span>
-              &nbsp;
-              <span class="me-2">{{client.name != "" ? client.name : $t('pin.unpair_single_unknown')}}</span>
             </div>
-            <div v-if="client.connected" class="me-2 btn btn-warning" @click="disconnectClient(client.uuid)"><i class="fas fa-link-slash"></i></div>
-            <div class="me-2 btn btn-primary" @click="editClient(client)"><i class="fas fa-edit"></i></div>
-            <div class="me-2 btn btn-danger" @click="unpairSingle(client.uuid)"><i class="fas fa-trash"></i></div>
           </div>
+        </div>
+      </form>
+
+      <div class="fl-row">
+        <svg class="row-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M10 2.5 18 17H2z"/><path d="M10 8v4M10 14.5v.5"/></svg>
+        <div class="fl-row-text">
+          <div class="fl-row-desc">{{ $t('pin.warning_msg') }}</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Defaults for every device -->
+    <section class="fl-group mb-0" aria-labelledby="def-h">
+      <h2 id="def-h">{{ $t('fork.when_connects') }}</h2>
+      <div class="fl-row">
+        <svg class="row-icon" width="20" height="20" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="2" y="3" width="14" height="9.5" rx="1"/><path d="M6.5 15.5h5M9 12.5v3"/></svg>
+        <div class="fl-row-text">
+          <div class="fl-row-title">{{ $t('fork.desk_monitor') }}</div>
+          <div class="fl-row-desc">{{ $t('fork.desk_monitor_desc') }}</div>
+        </div>
+        <div class="seg" role="group" :aria-label="$t('fork.desk_monitor')">
+          <button type="button" :aria-pressed="globalPolicy.display !== 'exclusive' ? 'true' : 'false'" @click="setGlobal({ display: 'primary' })">{{ $t('fork.on') }}</button>
+          <button type="button" :aria-pressed="globalPolicy.display === 'exclusive' ? 'true' : 'false'" @click="setGlobal({ display: 'exclusive' })">{{ $t('fork.off') }}</button>
+        </div>
+      </div>
+      <div class="fl-row">
+        <svg class="row-icon" width="20" height="20" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M3 7h2.5L9 4v10l-3.5-3H3z"/><path d="M12 6.5a3.5 3.5 0 0 1 0 5M14 4.5a6.4 6.4 0 0 1 0 9"/></svg>
+        <div class="fl-row-text">
+          <div class="fl-row-title">{{ $t('fork.desk_audio') }}</div>
+          <div class="fl-row-desc">{{ $t('fork.desk_audio_desc') }}</div>
+        </div>
+        <div class="seg" role="group" :aria-label="$t('fork.desk_audio')">
+          <button type="button" :aria-pressed="!globalPolicy.mute_wavelink ? 'true' : 'false'" @click="setGlobal({ mute_wavelink: false })">{{ $t('fork.on') }}</button>
+          <button type="button" :aria-pressed="globalPolicy.mute_wavelink ? 'true' : 'false'" @click="setGlobal({ mute_wavelink: true })">{{ $t('fork.off') }}</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Paired devices -->
+    <section class="d-flex flex-column gap-2" aria-labelledby="paired-h">
+      <h2 id="paired-h" class="fl-group-title">{{ $t('fork.paired_devices', { n: clients.length }) }}</h2>
+      <p class="fl-caption m-0">
+        {{ $t('pin.device_management_warning') }}
+        <a href="https://github.com/ClassicOldSong/Apollo/wiki/Permission-System" target="_blank">{{ $t('_common.learn_more') }}</a>
+      </p>
+      <div v-if="!clients.length" class="fl-row" style="border-radius: var(--fl-radius-card);">
+        <div class="fl-row-desc">{{ $t('pin.unpair_single_no_devices') }}</div>
+      </div>
+
+      <div v-for="c in clients" :key="c.uuid" class="exp" :id="c.uuid">
+        <button type="button" class="exp-head" :aria-expanded="c.open ? 'true' : 'false'" :aria-controls="'body-' + c.uuid" @click="toggle(c)">
+          <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M9 15h2"/></svg>
+          <span style="flex: 1 1 auto; min-width: 0;">
+            <span class="d-flex align-items-center gap-2">{{ c.name || $t('pin.unpair_single_unknown') }} <span v-if="c.connected" class="fl-pill">{{ $t('fork.streaming') }}</span></span>
+            <span class="d-block fl-muted" style="font-size: 12px;">{{ summary(c) }}</span>
+          </span>
+          <svg class="exp-chev" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m2 4 4 4 4-4"/></svg>
+        </button>
+
+        <div v-if="c.open" class="exp-body" :id="'body-' + c.uuid">
+          <div class="exp-row">
+            <div class="fl-row-text"><label class="fl-row-title" :for="'name-' + c.uuid">{{ $t('fork.name') }}</label></div>
+            <input :id="'name-' + c.uuid" class="form-control exp-ctl" v-model="c.draft.name">
+          </div>
+
+          <div class="exp-row">
+            <div class="fl-row-text">
+              <label class="fl-row-title" :for="'mon-' + c.uuid">{{ $t('fork.desk_monitor') }}</label>
+              <div class="fl-row-desc">{{ $t('fork.override_desc') }}</div>
+            </div>
+            <select :id="'mon-' + c.uuid" class="form-select exp-ctl" v-model="c.draft.host_display">
+              <option value="inherit">{{ $t('fork.use_default', { value: globalPolicy.display === 'exclusive' ? $t('fork.off') : $t('fork.on') }) }}</option>
+              <option value="primary">{{ $t('fork.on') }}</option>
+              <option value="exclusive">{{ $t('fork.off') }}</option>
+              <option value="stock">{{ $t('fork.leave_unchanged') }}</option>
+            </select>
+          </div>
+
+          <div class="exp-row">
+            <div class="fl-row-text">
+              <label class="fl-row-title" :for="'aud-' + c.uuid">{{ $t('fork.desk_audio') }}</label>
+              <div class="fl-row-desc">{{ $t('fork.override_desc') }}</div>
+            </div>
+            <select :id="'aud-' + c.uuid" class="form-select exp-ctl" v-model="c.draft.host_mute_wavelink">
+              <option value="inherit">{{ $t('fork.use_default', { value: globalPolicy.mute_wavelink ? $t('fork.off') : $t('fork.on') }) }}</option>
+              <option value="off">{{ $t('fork.on') }}</option>
+              <option value="on">{{ $t('fork.off') }}</option>
+            </select>
+          </div>
+
+          <div class="exp-row">
+            <div class="fl-row-text">
+              <div class="fl-row-title">{{ $t('fork.permissions') }}</div>
+              <div class="fl-row-desc">{{ accessLabel(c.draft.perm) }}</div>
+            </div>
+            <div class="perm-grid">
+              <div v-for="group in permissionGroups" :key="group.name">
+                <h4>{{ $t('fork.perm_group_' + group.name.toLowerCase()) }}</h4>
+                <div v-for="perm in group.permissions" :key="perm.name" class="form-check">
+                  <input class="form-check-input" type="checkbox" :id="perm.name + '-' + c.uuid"
+                         :checked="isSuppressed(c.draft.perm, perm.suppressed_by) || checkPermission(c.draft.perm, perm.name)"
+                         :disabled="isSuppressed(c.draft.perm, perm.suppressed_by)"
+                         @change="togglePermission(c, perm.name)">
+                  <label class="form-check-label" :for="perm.name + '-' + c.uuid">{{ $t(`permissions.${perm.name}`) }}</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="exp-row">
+            <div class="fl-row-text">
+              <label class="fl-row-title" :for="'mode-' + c.uuid">{{ $t('pin.display_mode_override') }}</label>
+              <div class="fl-row-desc">{{ $t('pin.display_mode_override_desc') }} <a href="https://github.com/ClassicOldSong/Apollo/wiki/Display-Mode-Override" target="_blank">{{ $t('_common.learn_more') }}</a></div>
+            </div>
+            <input :id="'mode-' + c.uuid" class="form-control exp-ctl" :class="{ 'is-invalid': !modeValid(c) }" placeholder="1920x1080x59.94" v-model="c.draft.display_mode">
+          </div>
+
+          <div class="exp-row" v-if="platform === 'windows'">
+            <div class="fl-row-text">
+              <label class="fl-row-title" :for="'vd-' + c.uuid">{{ $t('pin.always_use_virtual_display') }}</label>
+              <div class="fl-row-desc">{{ $t('pin.always_use_virtual_display_desc') }}</div>
+            </div>
+            <div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" role="switch" :id="'vd-' + c.uuid" v-model="c.draft.always_use_virtual_display"></div>
+          </div>
+
+          <div class="exp-row">
+            <div class="fl-row-text">
+              <label class="fl-row-title" :for="'lo-' + c.uuid">{{ $t('pin.enable_legacy_ordering') }}</label>
+              <div class="fl-row-desc">{{ $t('pin.enable_legacy_ordering_desc') }}</div>
+            </div>
+            <div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" role="switch" :id="'lo-' + c.uuid" v-model="c.draft.enable_legacy_ordering"></div>
+          </div>
+
+          <div class="exp-row">
+            <div class="fl-row-text">
+              <label class="fl-row-title" :for="'cc-' + c.uuid">{{ $t('pin.allow_client_commands') }}</label>
+              <div class="fl-row-desc">{{ $t('pin.allow_client_commands_desc') }}</div>
+            </div>
+            <div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" role="switch" :id="'cc-' + c.uuid" v-model="c.draft.allow_client_commands"></div>
+            <template v-if="c.draft.allow_client_commands">
+              <div v-for="cmdType in ['do', 'undo']" :key="cmdType" class="cmd-list">
+                <div class="fl-row-title mt-2">{{ $t(`pin.client_${cmdType}_cmd`) }}</div>
+                <div class="fl-row-desc">{{ $t(`pin.client_${cmdType}_cmd_desc`) }} <a href="https://github.com/ClassicOldSong/Apollo/wiki/Client-Commands" target="_blank">{{ $t('_common.learn_more') }}</a></div>
+                <div v-for="(cmd, i) in c.draft[cmdType]" :key="i" class="cmd-item">
+                  <label class="fl-sr" :for="`${cmdType}-${i}-${c.uuid}`">{{ $t('_common.cmd_val') }}</label>
+                  <input :id="`${cmdType}-${i}-${c.uuid}`" class="form-control" v-model="cmd.cmd" :placeholder="$t('_common.cmd_val')">
+                  <div class="form-check m-0" v-if="platform === 'windows'">
+                    <input class="form-check-input" type="checkbox" :id="`${cmdType}-el-${i}-${c.uuid}`" v-model="cmd.elevated">
+                    <label class="form-check-label" :for="`${cmdType}-el-${i}-${c.uuid}`">{{ $t('_common.elevated') }}</label>
+                  </div>
+                  <button type="button" class="btn btn-secondary" @click="c.draft[cmdType].splice(i, 1)" :aria-label="$t('fork.remove')">{{ $t('fork.remove') }}</button>
+                </div>
+                <div><button type="button" class="btn btn-secondary" @click="c.draft[cmdType].push({ cmd: '', elevated: false })">{{ $t('config.add') }}</button></div>
+              </div>
+            </template>
+          </div>
+
+          <div class="exp-row" style="gap: 8px;">
+            <button type="button" class="btn btn-primary" :disabled="!dirty(c) || !modeValid(c) || c.saving" @click="saveClient(c)">{{ $t('_common.save') }}</button>
+            <button type="button" class="btn btn-secondary" :disabled="!dirty(c) || c.saving" @click="resetDraft(c)">{{ $t('fork.discard') }}</button>
+            <button type="button" class="btn btn-secondary" v-if="c.connected" @click="disconnectClient(c)">{{ $t('fork.disconnect') }}</button>
+            <span role="status" style="font-size: 13px;" :class="c.msgOk ? 'status-ok' : 'status-bad'">{{ c.msg }}</span>
+            <span style="flex: 1 1 auto;"></span>
+            <template v-if="c.confirmUnpair">
+              <span style="font-size: 13px;">{{ $t('fork.unpair_confirm', { name: c.name || $t('pin.unpair_single_unknown') }) }}</span>
+              <button type="button" class="btn btn-danger" @click="unpairSingle(c)">{{ $t('fork.unpair') }}</button>
+              <button type="button" class="btn btn-secondary" @click="c.confirmUnpair = false">{{ $t('_common.cancel') }}</button>
+            </template>
+            <button v-else type="button" class="btn btn-danger" @click="c.confirmUnpair = true">{{ $t('fork.unpair') }}</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end align-items-center gap-2 pt-2" v-if="clients.length">
+        <span role="status" style="font-size: 13px;" :class="unpairAllStatus ? 'status-ok' : 'status-bad'" v-if="unpairAllStatus !== null">{{ unpairAllStatus ? $t('pin.unpair_all_success') : $t('pin.unpair_all_error') }}</span>
+        <template v-if="confirmUnpairAll">
+          <span style="font-size: 13px;">{{ $t('fork.unpair_all_confirm') }}</span>
+          <button type="button" class="btn btn-danger" :disabled="unpairAllPressed" @click="unpairAll">{{ $t('pin.unpair_all') }}</button>
+          <button type="button" class="btn btn-secondary" @click="confirmUnpairAll = false">{{ $t('_common.cancel') }}</button>
         </template>
-      </ul>
-      <ul v-else class="list-group list-group-flush list-group-item-light">
-        <div class="list-group-item p-3 text-center"><em>{{ $t('pin.unpair_single_no_devices') }}</em></div>
-      </ul>
-    </div>
+        <button v-else type="button" class="danger-link" @click="confirmUnpairAll = true">{{ $t('pin.unpair_all') }}</button>
+      </div>
+    </section>
   </div>
 </body>
 
@@ -212,25 +294,21 @@
   import { createApp } from 'vue'
   import { initApp } from './init'
   import Navbar from './Navbar.vue'
-  import Checkbox from './Checkbox.vue'
+  import { getSession, setPolicy, setClientPolicy, pair } from './fork_api'
 
   let resetOTPTimeout = null;
   const qrContainer = document.createElement('div');
-  qrContainer.className = "mb-2 p-2 bg-white"
   const qrCode = new QRCode(qrContainer);
 
   const updateQR = (url) => {
     qrCode.clear()
     qrCode.makeCode(url)
-
     const refContainer = document.querySelector('#qrRef');
     if (refContainer) refContainer.appendChild(qrContainer);
   }
 
   let hostInfoCache = JSON.parse(sessionStorage.getItem('hostInfo'));
-  let hostManuallySet = false;
-
-  if (hostInfoCache) hostManuallySet = true;
+  let hostManuallySet = !!hostInfoCache;
 
   const saveHostCache = ({hostAddr, hostPort}, manual) => {
     hostInfoCache = {hostAddr, hostPort}
@@ -240,65 +318,25 @@
     }
   }
 
-  /**
-   * Permissions:
-   enum class PERM: uint32_t {
-      _reserved        = 1,
-
-      _input           = _reserved << 8,   // Input permission group
-      input_controller = _input << 0,      // Allow controller input
-      input_touch      = _input << 1,      // Allow touch input
-      input_pen        = _input << 2,      // Allow pen input
-      input_mouse      = _input << 3,      // Allow mouse input
-      input_kbd        = _input << 4,      // Allow keyboard input
-      _all_inputs      = input_controller | input_touch | input_pen | input_mouse | input_kbd,
-
-      _operation       = _input << 8,      // Operation permission group
-      clipboard_set    = _operation << 0,  // Allow set clipboard from client
-      clipboard_read   = _operation << 1,  // Allow read clipboard from host
-      file_upload      = _operation << 2,  // Allow upload files to host
-      file_dwnload     = _operation << 3,  // Allow download files from host
-      server_cmd       = _operation << 4,  // Allow execute server cmd
-      _all_opeiations  = clipboard_set | clipboard_read | file_upload | file_dwnload | server_cmd,
-
-      _action          = _operation << 8,  // Action permission group
-      list             = _action << 0,     // Allow list apps
-      view             = _action << 1,     // Allow view streams
-      launch           = _action << 2,     // Allow launch apps
-      _allow_view      = view | launch,    // Launch contains view permission
-      _all_actions     = list | view | launch,
-
-      _default         = view | list,      // Default permissions for new clients
-      _no              = 0,                // No permissions are granted
-      _all             = _all_inputs | _all_opeiations | _all_actions, // All current permissions
-    };
-  */
-
+  // Permission bits, as in src/crypto.h (PERM).
   const permissionMapping = {
-    // Input permission group
     input_controller: 0x00000100,
     input_touch: 0x00000200,
     input_pen: 0x00000400,
     input_mouse: 0x00000800,
     input_kbd: 0x00001000,
     _all_inputs: 0x00001F00,
-
-    // Operation permission group
     clipboard_set: 0x00010000,
     clipboard_read: 0x00020000,
     file_upload: 0x00040000,
     file_dwnload: 0x00080000,
     server_cmd: 0x00100000,
     _all_operations: 0x001F0000,
-
-    // Action permission group
     list: 0x01000000,
     view: 0x02000000,
     launch: 0x04000000,
     _allow_view: 0x06000000,
     _all_actions: 0x07000000,
-
-    // Special permissions
     _default: 0x03000000,
     _no: 0x00000000,
     _all: 0x071F1F00
@@ -306,104 +344,108 @@
 
   const permissionGroups = [
     { name: 'Action', permissions: [
-      {
-        name: 'list',
-        suppressed_by: ['view', 'launch']
-      }, {
-        name: 'view',
-        suppressed_by: ['launch']
-      }, {
-        name: 'launch',
-        suppressed_by: []
-      }
+      { name: 'list', suppressed_by: ['view', 'launch'] },
+      { name: 'view', suppressed_by: ['launch'] },
+      { name: 'launch', suppressed_by: [] },
     ] },
     { name: 'Operation', permissions: [
-      {
-        name: 'clipboard_set',
-        suppressed_by: []
-      },
-      {
-        name: 'clipboard_read',
-        suppressed_by: []
-      },
-      {
-        name: 'server_cmd',
-        suppressed_by: []
-      }
+      { name: 'clipboard_set', suppressed_by: [] },
+      { name: 'clipboard_read', suppressed_by: [] },
+      { name: 'server_cmd', suppressed_by: [] },
     ] },
     { name: 'Input', permissions: [
-      {
-        name: 'input_controller',
-        suppressed_by: []
-      }, {
-        name: 'input_touch',
-        suppressed_by: []
-      }, {
-        name: 'input_pen',
-        suppressed_by: []
-      }, {
-        name: 'input_mouse',
-        suppressed_by: []
-      }, {
-        name: 'input_kbd',
-        suppressed_by: []
-      }
+      { name: 'input_controller', suppressed_by: [] },
+      { name: 'input_touch', suppressed_by: [] },
+      { name: 'input_pen', suppressed_by: [] },
+      { name: 'input_mouse', suppressed_by: [] },
+      { name: 'input_kbd', suppressed_by: [] },
     ] },
   ];
 
-  let currentEditingClient = null;
+  const otpDefaults = () => ({
+    editingHost: false,
+    otp: '',
+    passphrase: '',
+    otpMessage: '',
+    otpStatus: 'warning',
+    deviceName: '',
+    hostAddr: '',
+    hostPort: '',
+    hostName: '',
+  })
 
-  const data = () => {
-    return {
-      platform: '',
-      editingHost: false,
-      currentTab: location.hash || '#OTP',
-      otp: '',
-      passphrase: '',
-      otpMessage: '',
-      otpStatus: 'warning',
-      deviceName: '',
-      hostAddr: '',
-      hostPort: '',
-      hostName: '',
-      permissionGroups,
-      clients: [],
-      showApplyMessage: false,
-      unpairAllPressed: false,
-      unpairAllStatus: null
-    }
-  }
-
-  const cmdTpl = {
-    cmd: '',
-    elevated: 'false'
-  }
+  const draftOf = (c) => ({
+    name: c.name,
+    host_display: c.host_display || 'inherit',
+    host_mute_wavelink: c.host_mute_wavelink || 'inherit',
+    perm: c.perm,
+    display_mode: c.display_mode || '',
+    always_use_virtual_display: !!c.always_use_virtual_display,
+    enable_legacy_ordering: !!c.enable_legacy_ordering,
+    allow_client_commands: !!c.allow_client_commands,
+    do: JSON.parse(JSON.stringify(c.do || [])).map((x) => ({ cmd: x.cmd, elevated: !!x.elevated })),
+    undo: JSON.parse(JSON.stringify(c.undo || [])).map((x) => ({ cmd: x.cmd, elevated: !!x.elevated })),
+  })
 
   let app = createApp({
-    components: {
-      Navbar,
-      Checkbox
-    },
+    components: { Navbar },
     inject: ['i18n'],
-    data,
+    data() {
+      return {
+        platform: '',
+        tab: location.hash === '#PIN' ? 'PIN' : location.hash === '#OTP' ? 'OTP' : 'PIN',
+        pin: '',
+        pinName: '',
+        pinStatus: '',
+        pinStatusOk: null,
+        ...otpDefaults(),
+        permissionGroups,
+        clients: [],
+        globalPolicy: { display: 'stock', mute_wavelink: false },
+        unpairAllPressed: false,
+        unpairAllStatus: null,
+        confirmUnpairAll: false,
+      }
+    },
     computed: {
       deepLink() {
         return encodeURI(`art://${this.hostAddr}:${this.hostPort}?pin=${this.otp}&passphrase=${this.passphrase}&name=${this.hostName}`);
       },
       canSaveHost() {
         return !!(this.hostAddr && this.hostPort);
-      }
+      },
     },
     created() {
       this.refreshClients();
+      this.refreshPolicy();
     },
     methods: {
-      switchTab(currentTab) {
-        location.hash = currentTab;
-        const clients = this.clients;
-        Object.assign(this, data(), { clients });
+      // ---- pairing -------------------------------------------------------------------------
+      switchTab(tab) {
+        history.replaceState(null, '', '#' + tab);
+        Object.assign(this, otpDefaults(), { tab, pinStatus: '', pinStatusOk: null });
         hostInfoCache = null;
         clearTimeout(resetOTPTimeout);
+      },
+      async registerDevice() {
+        this.pinStatus = this.$t('fork.pairing');
+        this.pinStatusOk = null;
+        try {
+          const r = await pair(this.pin, this.pinName.trim());
+          if (r.status === true) {
+            this.pinStatus = this.$t('pin.pair_success') + ' ' + this.$t('pin.pair_success_check_perm');
+            this.pinStatusOk = true;
+            this.pin = '';
+            this.pinName = '';
+            setTimeout(() => this.refreshClients(), 1000);
+          } else {
+            this.pinStatus = this.$t('pin.pair_failure');
+            this.pinStatusOk = false;
+          }
+        } catch (e) {
+          this.pinStatus = this.$t('pin.pair_failure');
+          this.pinStatusOk = false;
+        }
       },
       editHost() {
         this.editingHost = !this.editingHost;
@@ -415,46 +457,11 @@
         this.editingHost = false;
         saveHostCache(this, true);
       },
-      registerDevice(e) {
-        let pin = document.querySelector("#pin-input").value;
-        let name = document.querySelector("#name-input").value;
-        document.querySelector("#status").innerHTML = "";
-        let b = JSON.stringify({pin: pin, name: name});
-        fetch("./api/pin", {
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          method: 'POST',
-          body: b
-        })
-          .then((response) => response.json())
-          .then((response) => {
-            if (response.status === true) {
-              document.querySelector(
-                "#status"
-              ).innerHTML = `<div class="alert alert-success" role="alert">${this.i18n.t('pin.pair_success')}</div>`;
-              document.querySelector("#pin-input").value = "";
-              document.querySelector("#name-input").value = "";
-
-              setTimeout(() => this.refreshClients(), 1000);
-
-              alert(this.i18n.t('pin.pair_success_check_perm'));
-            } else {
-              document.querySelector(
-                "#status"
-              ).innerHTML = `<div class="alert alert-danger" role="alert">${this.i18n.t('pin.pair_failure')}</div>`;
-            }
-          });
-      },
       requestOTP() {
         if (this.editingHost) return;
-
         fetch("./api/otp", {
           credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           method: 'POST',
           body: JSON.stringify({ passphrase: this.passphrase, deviceName: this.deviceName })
         })
@@ -469,7 +476,7 @@
           this.otp = resp.otp
           this.hostName = resp.name
           this.otpStatus = 'success'
-          this.otpMessage = this.i18n.t('pin.otp_success')
+          this.otpMessage = this.$t('pin.otp_success')
 
           const isLocalHost = ['localhost', '127.0.0.1', '[::1]'].indexOf(location.hostname) >= 0
 
@@ -478,258 +485,191 @@
           } else {
             this.hostAddr = resp.ip
             this.hostPort = parseInt(location.port, 10) - 1
-
             if (!isLocalHost) {
               this.hostAddr = location.hostname
             }
-
             saveHostCache(this);
           }
 
           if (this.hostAddr) {
-            updateQR(this.deepLink);
+            this.$nextTick(() => updateQR(this.deepLink));
 
             if (resetOTPTimeout !== null) clearTimeout(resetOTPTimeout)
             resetOTPTimeout = setTimeout(() => {
-              Object.assign(this, data(), {
-                otp: this.i18n.t('pin.otp_expired'),
-                otpMessage: this.i18n.t('pin.otp_expired_msg')
+              Object.assign(this, otpDefaults(), {
+                otp: this.$t('pin.otp_expired'),
+                otpMessage: this.$t('pin.otp_expired_msg'),
+                otpStatus: 'danger',
               })
               resetOTPTimeout = null
             }, 3 * 60 * 1000)
-
-            if (!isLocalHost) {
-              setTimeout(() => {
-                if (window.confirm(this.i18n.t('pin.otp_pair_now'))) {
-                  window.open(this.deepLink);
-                }
-              }, 0)
-            }
           }
         })
       },
-      clickedApplyBanner() {
-        this.showApplyMessage = false;
+
+      // ---- defaults ------------------------------------------------------------------------
+      async refreshPolicy() {
+        try {
+          this.globalPolicy = (await getSession()).global
+        } catch (e) {
+          console.error(e)
+        }
       },
-      addCmd(arr, idx) {
-        const newCmd = Object.assign({}, cmdTpl);
-        if (idx < 0) {
-          arr.push(newCmd);
+      async setGlobal(change) {
+        try {
+          const r = await setPolicy(false, change)
+          if (r.global) this.globalPolicy = r.global
+        } catch (e) {
+          console.error(e)
+        }
+      },
+
+      // ---- devices ---------------------------------------------------------------------------
+      toggle(c) {
+        c.open = !c.open
+        if (c.open) history.replaceState(null, '', '#' + c.uuid)
+      },
+      summary(c) {
+        const parts = []
+        if (c.connected) parts.push(this.$t('fork.streaming_now'))
+        else if (c.last_seen) parts.push(this.$t('fork.last_connected', { when: this.ago(c.last_seen) }))
+        const d = c.host_display || 'inherit'
+        const m = c.host_mute_wavelink || 'inherit'
+        if (d === 'inherit' && m === 'inherit') {
+          parts.push(this.$t('fork.uses_defaults'))
         } else {
-          arr.splice(idx + 1, 0, newCmd);
+          if (d !== 'inherit') parts.push(d === 'exclusive' ? this.$t('fork.monitor_off') : d === 'primary' ? this.$t('fork.monitor_on') : this.$t('fork.monitor_stock'))
+          if (m !== 'inherit') parts.push(m === 'on' ? this.$t('fork.desk_audio_off') : this.$t('fork.desk_audio_on'))
         }
+        parts.push(this.accessLabel(c.perm))
+        return parts.join(' · ')
       },
-      removeCmd(arr, idx) {
-        arr.splice(idx, 1);
+      ago(unixSeconds) {
+        const s = Math.max(0, Date.now() / 1000 - unixSeconds)
+        if (s < 60) return this.$t('fork.ago_now')
+        if (s < 3600) return this.$t('fork.ago_min', { n: Math.floor(s / 60) })
+        if (s < 86400) return this.$t('fork.ago_hours', { n: Math.floor(s / 3600) })
+        return this.$t('fork.ago_days', { n: Math.floor(s / 86400) })
       },
-      editClient(client) {
-        if (currentEditingClient) {
-          this.cancelEdit(currentEditingClient);
-        }
-        client.editing = true;
-        client.editPerm = client.perm;
-        client.editName = client.name;
-        client.editAllowClientCommands = client.allow_client_commands;
-        client.editEnableLegacyOrdering = client.enable_legacy_ordering;
-        client.editAlwaysUseVirtualDisplay = client.always_use_virtual_display;
-        client.editDisplayMode = client.display_mode;
-        client.edit_do = JSON.parse(JSON.stringify(client.do || []));
-        client.edit_undo = JSON.parse(JSON.stringify(client.undo || []));
-        currentEditingClient = client;
-
-        console.log(client.do, client.undo)
-      },
-      cancelEdit(client) {
-        currentEditingClient = null;
-        client.editing = false;
-        client.editPerm = client.perm;
-        client.editName = client.name;
-        client.editDisplayMode = client.display_mode;
-        client.editAllowClientCommands = client.allow_client_commands;
-        client.editEnableLegacyOrdering = client.enable_legacy_ordering;
-        client.editAlwaysUseVirtualDisplay = client.always_use_virtual_display;
-      },
-      saveClient(client) {
-        client.editing = false;
-        currentEditingClient = null;
-        const editedClient = {
-          uuid: client.uuid,
-          name: client.editName,
-          display_mode: client.editDisplayMode.trim(),
-          allow_client_commands: client.editAllowClientCommands,
-          enable_legacy_ordering: client.editEnableLegacyOrdering,
-          always_use_virtual_display: client.editAlwaysUseVirtualDisplay,
-          perm: client.editPerm & permissionMapping._all,
-          do: client.edit_do.reduce((filtered, {cmd: _cmd, elevated}) => {
-            const cmd = _cmd.trim()
-            if (cmd) {
-              filtered.push({
-                cmd,
-                elevated
-              })
-            }
-            return filtered
-          }, []),
-          undo: client.edit_undo.reduce((filtered, {cmd: _cmd, elevated}) => {
-            const cmd = _cmd.trim()
-            if (cmd) {
-              filtered.push({
-                cmd,
-                elevated
-              })
-            }
-            return filtered
-          }, [])
-        }
-        fetch("./api/clients/update", {
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          method: 'POST',
-          body: JSON.stringify(editedClient)
-        })
-        .then(resp => resp.json())
-        .then(resp => {
-          if (resp.status) {
-            this.refreshClients();
-          } else {
-            throw new Error(resp.message);
-          }
-        })
-        .catch(err => {
-          alert(this.i18n.t('pin.save_client_error') + err);
-        })
-        .finally(() => {
-          setTimeout(() => {
-            this.refreshClients();
-          }, 1000);
-        });
-      },
-      permToStr(perm) {
-        const permSegments = [];
-        permSegments.push((perm >> 24) & 0xFF);
-        permSegments.push((perm >> 16) & 0xFF);
-        permSegments.push((perm >> 8) & 0xFF);
-        return permSegments.map(seg => seg.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+      accessLabel(perm) {
+        const p = perm & permissionMapping._all
+        if (p === permissionMapping._all) return this.$t('fork.access_full')
+        if (p === permissionMapping._no) return this.$t('fork.access_none')
+        if ((p & ~permissionMapping._default) === 0) return this.$t('fork.access_view')
+        return this.$t('fork.access_custom')
       },
       checkPermission(perm, permission) {
         return (perm & permissionMapping[permission]) !== 0;
       },
-      isSuppressed(perm, permission, suppressed_by) {
-        for (const suppressed of suppressed_by) {
-          if (this.checkPermission(perm, suppressed)) {
-            return true;
-          }
+      isSuppressed(perm, suppressed_by) {
+        return suppressed_by.some((s) => this.checkPermission(perm, s));
+      },
+      togglePermission(c, permission) {
+        c.draft.perm ^= permissionMapping[permission];
+      },
+      modeValid(c) {
+        const v = (c.draft.display_mode || '').trim()
+        return !v || /^\d+x\d+x\d+(\.\d+)?$/.test(v)
+      },
+      dirty(c) {
+        return JSON.stringify(c.draft) !== JSON.stringify(draftOf(c))
+      },
+      resetDraft(c) {
+        c.draft = draftOf(c)
+        c.msg = ''
+      },
+      async saveClient(c) {
+        c.saving = true
+        c.msg = ''
+        const clean = (list) => list.map(({ cmd, elevated }) => ({ cmd: cmd.trim(), elevated })).filter((x) => x.cmd)
+        const d = c.draft
+        try {
+          const r = await fetch("./api/clients/update", {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            body: JSON.stringify({
+              uuid: c.uuid,
+              name: d.name,
+              display_mode: d.display_mode.trim(),
+              allow_client_commands: d.allow_client_commands,
+              enable_legacy_ordering: d.enable_legacy_ordering,
+              always_use_virtual_display: d.always_use_virtual_display,
+              perm: d.perm & permissionMapping._all,
+              do: clean(d.do),
+              undo: clean(d.undo),
+            })
+          }).then((x) => x.json())
+          if (!r.status) throw new Error(r.message || 'update failed')
+          const p = await setClientPolicy(c.uuid, d.host_display, d.host_mute_wavelink)
+          if (!p.status) throw new Error('host policy update failed')
+          c.msg = this.$t('fork.saved')
+          c.msgOk = true
+          await this.refreshClients(c.uuid)
+        } catch (e) {
+          c.msg = this.$t('pin.save_client_error') + e.message
+          c.msgOk = false
+        } finally {
+          c.saving = false
         }
-        return false;
       },
-      togglePermission(client, permission) {
-        client.editPerm ^= permissionMapping[permission];
-      },
-      validateModeOverride(event) {
-        const value = event.target.value.trim();
-        if (value && !value.match(/^\d+x\d+x\d+(\.\d+)?$/)) {
-          event.target.setCustomValidity(this.i18n.t('pin.display_mode_override_error'));
-        } else {
-          event.target.setCustomValidity('');
-        }
-
-        event.target.reportValidity();
-      },
-      disconnectClient(uuid) {
+      disconnectClient(c) {
         fetch("./api/clients/disconnect", {
           credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           method: 'POST',
-          body: JSON.stringify({ uuid })
-        }).finally(() => {
-          setTimeout(() => {
-            this.refreshClients();
-          }, 1000);
-        });
+          body: JSON.stringify({ uuid: c.uuid })
+        }).finally(() => setTimeout(() => this.refreshClients(c.uuid), 1000));
       },
       unpairAll() {
         this.unpairAllPressed = true;
         fetch("./api/clients/unpair-all", {
           credentials: 'include',
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
         })
           .then((r) => r.json())
           .then((r) => {
             this.unpairAllPressed = false;
+            this.confirmUnpairAll = false;
             this.unpairAllStatus = r.status;
-            setTimeout(() => {
-              this.unpairAllStatus = null;
-            }, 5000);
+            setTimeout(() => { this.unpairAllStatus = null; }, 5000);
             this.refreshClients();
           });
       },
-      unpairSingle(uuid) {
+      unpairSingle(c) {
         fetch("./api/clients/unpair", {
           credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           method: 'POST',
-          body: JSON.stringify({ uuid })
-        }).then(() => {
-          this.showApplyMessage = true;
-          this.refreshClients();
-        });
+          body: JSON.stringify({ uuid: c.uuid })
+        }).then(() => this.refreshClients());
       },
-      refreshClients() {
-        if (currentEditingClient) {
-          this.cancelEdit(currentEditingClient);
-        }
-        fetch("./api/clients/list", { credentials: 'include' })
-          .then((response) => response.json())
-          .then((response) => {
-            if (response.status && response.named_certs && response.named_certs.length) {
-              this.platform = response.platform
-              this.clients = response.named_certs.map(({
-                name,
-                uuid,
-                display_mode,
-                perm,
-                connected,
-                do: _do,
-                undo,
-                allow_client_commands,
-                always_use_virtual_display,
-                enable_legacy_ordering
-              }) => {
-                const permInt = parseInt(perm, 10);
-                return {
-                  name,
-                  uuid,
-                  display_mode,
-                  perm: permInt,
-                  connected,
-                  editing: false,
-                  do: _do,
-                  undo,
-                  allow_client_commands,
-                  enable_legacy_ordering,
-                  always_use_virtual_display
-                }
-              })
-              currentEditingClient = null;
-            } else {
-              this.clients = [];
+      async refreshClients(keepOpen) {
+        try {
+          const response = await (await fetch("./api/clients/list", { credentials: 'include' })).json()
+          if (!response.status) return
+          this.platform = response.platform
+          const open = new Set(this.clients.filter((c) => c.open).map((c) => c.uuid))
+          if (keepOpen) open.add(keepOpen)
+          const hash = location.hash.slice(1)
+          this.clients = (response.named_certs || []).map((c) => {
+            const prev = this.clients.find((p) => p.uuid === c.uuid)
+            return {
+              ...c,
+              open: open.has(c.uuid) || (!this.clients.length && hash === c.uuid),
+              draft: draftOf(c),
+              saving: false,
+              msg: prev && keepOpen === c.uuid ? prev.msg : '',
+              msgOk: prev ? prev.msgOk : true,
+              confirmUnpair: false,
             }
           })
-          .catch(e => {
-            console.error(e)
-            location.reload();
-          });
+        } catch (e) {
+          console.error(e)
+        }
       },
-    }
+    },
   });
 
   initApp(app);

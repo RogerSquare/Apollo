@@ -296,6 +296,12 @@ namespace nvhttp {
   host_policy::settings_t effective_host_policy(const std::string &uuid);
 
   /**
+   * @brief Record that a paired client just launched or resumed a stream (fork): sets last_seen and saves.
+   *        Unknown uuids (e.g. web UI launches) are ignored.
+   */
+  void touch_device(const std::string &uuid);
+
+  /**
    * @brief A paired client's stored override (fork). Nullopt for unknown uuids.
    */
   std::optional<host_policy::override_t> device_host_policy(const std::string &uuid);

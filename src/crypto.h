@@ -109,6 +109,7 @@ namespace crypto {
     bool allow_client_commands;
     bool always_use_virtual_display;
     host_policy::override_t host_policy;  ///< Per-client override of config::host (fork).
+    std::int64_t last_seen = 0;  ///< Unix seconds of the last stream launch/resume, 0 = never (fork).
   };
 
   using p_named_cert_t = std::shared_ptr<named_cert_t>;
