@@ -16,6 +16,7 @@
 #include <nlohmann/json.hpp>
 
 // local includes
+#include "host_policy.h"
 #include "utility.h"
 
 namespace crypto {
@@ -107,6 +108,7 @@ namespace crypto {
     bool enable_legacy_ordering;
     bool allow_client_commands;
     bool always_use_virtual_display;
+    host_policy::override_t host_policy;  ///< Per-client override of config::host (fork).
   };
 
   using p_named_cert_t = std::shared_ptr<named_cert_t>;

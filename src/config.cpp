@@ -577,6 +577,8 @@ namespace config {
     true, // forward_rumble
   };
 
+  host_policy::settings_t host {};
+
   sunshine_t sunshine {
     false, // hide_tray_controls
     true, // enable_pairing
@@ -1207,6 +1209,16 @@ namespace config {
     string_f(vars, "fallback_mode", video.fallback_mode);
     bool_f(vars, "isolated_virtual_display_option", video.isolated_virtual_display_option);
     bool_f(vars, "ignore_encoder_probe_failure", video.ignore_encoder_probe_failure);
+
+    // Fork: global default host policy (see host_policy.h)
+    {
+      std::string display;
+      string_f(vars, "host_display_policy", display);
+      if (auto parsed = host_policy::display_from_string(display)) {
+        host.display = *parsed;
+      }
+      bool_f(vars, "host_mute_wavelink", host.mute_wavelink);
+    }
 
     path_f(vars, "pkey", nvhttp.pkey);
     path_f(vars, "cert", nvhttp.cert);
