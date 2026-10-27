@@ -38,6 +38,7 @@
 #include "process.h"
 #include "rtsp.h"
 #include "stream.h"
+#include "system_tray.h"
 #include "utility.h"
 #include "uuid.h"
 
@@ -237,7 +238,16 @@ namespace confighttp {
       return false;
     }
     auto address = net::addr_to_normalized_string(request->remote_endpoint().address());
-    return net::from_address(address) == net::PC;
+    if (net::from_address(address) != net::PC) {
+      return false;
+    }
+#if defined SUNSHINE_TRAY && SUNSHINE_TRAY >= 1
+    // The tray app shows its own flyout on connect; Apollo's toasts would stack on it.
+    if (auto c = request->header.find("X-Apollo-Companion"); c != request->header.end() && c->second == "tray") {
+      system_tray::note_companion_tray();
+    }
+#endif
+    return true;
   }
 
   bool authenticate(resp_https_t response, req_https_t request, bool needsRedirect = false) {

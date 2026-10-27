@@ -34,6 +34,8 @@
   #endif
 
   // standard includes
+  #include <atomic>
+  #include <chrono>
   #include <csignal>
   #include <string>
 
@@ -56,6 +58,20 @@ using namespace std::literals;
 
 // system_tray namespace
 namespace system_tray {
+
+  // Fork: while the companion tray app (tray/ApolloTray) is running it shows its own flyout on
+  // connect, so the informational toasts below would only stack on top of it. It tags its polls
+  // with X-Apollo-Companion: tray (see confighttp); actionable toasts (pairing, launch error) stay.
+  static std::atomic<std::int64_t> companion_seen_ms {0};
+
+  static std::int64_t steady_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  }
+
+  void note_companion_tray() {
+    companion_seen_ms = steady_ms();
+  }
+
   static std::atomic<bool> tray_initialized = false;
 
   void tray_open_ui_cb(struct tray_menu *item) {
@@ -246,6 +262,17 @@ namespace system_tray {
     return 0;
   }
 
+  /**
+   * @brief Drop the pending informational toast if the companion tray app polled in the last 10 s.
+   */
+  static void quiet_if_companion() {
+    if (steady_ms() - companion_seen_ms.load() < 10000) {
+      tray.notification_title = NULL;
+      tray.notification_text = NULL;
+      tray.notification_icon = NULL;
+    }
+  }
+
   void update_tray_playing(std::string app_name) {
     if (!tray_initialized) {
       return;
@@ -272,6 +299,7 @@ namespace system_tray {
     tray.notification_icon = TRAY_ICON_PLAYING;
     tray.tooltip = PROJECT_NAME;
     tray.menu[2].text = force_close_msg;
+    quiet_if_companion();
     tray_update(&tray);
   }
 
@@ -296,6 +324,7 @@ namespace system_tray {
     tray.notification_text = msg;
     tray.notification_icon = TRAY_ICON_PAUSING;
     tray.tooltip = PROJECT_NAME;
+    quiet_if_companion();
     tray_update(&tray);
   }
 
@@ -321,6 +350,7 @@ namespace system_tray {
     tray.notification_text = msg;
     tray.tooltip = PROJECT_NAME;
     tray.menu[2].text = TRAY_MSG_NO_APP_RUNNING;
+    quiet_if_companion();
     tray_update(&tray);
   }
 
@@ -395,6 +425,7 @@ namespace system_tray {
     tray.notification_text = msg;
     tray.notification_icon = TRAY_ICON;
     tray.tooltip = PROJECT_NAME;
+    quiet_if_companion();
     tray_update(&tray);
   }
 
@@ -419,6 +450,7 @@ namespace system_tray {
     tray.notification_text = msg;
     tray.notification_icon = TRAY_ICON;
     tray.tooltip = PROJECT_NAME;
+    quiet_if_companion();
     tray_update(&tray);
   }
 

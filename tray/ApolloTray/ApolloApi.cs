@@ -122,6 +122,8 @@ public sealed class ApolloApi : IDisposable
             if (_token == null) return null;
             using var req = new HttpRequestMessage(method, path);
             req.Headers.Add("X-Apollo-Token", _token);
+            // While we poll, Apollo mutes its own informational toasts (our flyout replaces them).
+            req.Headers.Add("X-Apollo-Companion", "tray");
             if (json != null) req.Content = new StringContent(json, Encoding.UTF8, "application/json");
             using var resp = await _http.SendAsync(req);
             if (resp.StatusCode == HttpStatusCode.Unauthorized)
