@@ -258,6 +258,9 @@ namespace nvhttp {
         if (named_cert_p->host_policy.mute_wavelink) {
           named_cert_node["host_mute_wavelink"] = host_policy::override_bool_to_string(named_cert_p->host_policy.mute_wavelink);
         }
+        if (named_cert_p->host_policy.touch_scale) {
+          named_cert_node["host_touch_scale"] = host_policy::override_touch_scale_to_string(named_cert_p->host_policy.touch_scale);
+        }
         if (named_cert_p->last_seen) {
           named_cert_node["last_seen"] = named_cert_p->last_seen;
         }
@@ -360,6 +363,7 @@ namespace nvhttp {
         named_cert_p->always_use_virtual_display = el.value("always_use_virtual_display", false);
         named_cert_p->host_policy.display = host_policy::override_display_from_string(el.value("host_display", ""));
         named_cert_p->host_policy.mute_wavelink = host_policy::override_bool_from_string(el.value("host_mute_wavelink", ""));
+        named_cert_p->host_policy.touch_scale = host_policy::override_touch_scale_from_string(el.value("host_touch_scale", ""));
         named_cert_p->last_seen = util::get_non_string_json_value<std::int64_t>(el, "last_seen", 0);
         // Load command entries for "do" and "undo" keys.
         named_cert_p->do_cmds = extract_command_entries(el, "do");
@@ -470,7 +474,8 @@ namespace nvhttp {
     touch_device(named_cert_p->uuid);
     BOOST_LOG(info) << "Host policy for client ["sv << launch_session->device_name << "]: display="sv
                     << host_policy::to_string(launch_session->host_policy.display)
-                    << ", mute_wavelink="sv << launch_session->host_policy.mute_wavelink;
+                    << ", mute_wavelink="sv << launch_session->host_policy.mute_wavelink
+                    << ", touch_scale="sv << launch_session->host_policy.touch_scale;
     launch_session->perm = named_cert_p->perm;
     launch_session->enable_sops = util::from_view(get_arg(args, "sops", "0"));
     launch_session->surround_info = util::from_view(get_arg(args, "surroundAudioInfo", "196610"));
@@ -1046,6 +1051,7 @@ namespace nvhttp {
       named_cert_node["always_use_virtual_display"] = named_cert->always_use_virtual_display;
       named_cert_node["host_display"] = host_policy::override_display_to_string(named_cert->host_policy.display);
       named_cert_node["host_mute_wavelink"] = host_policy::override_bool_to_string(named_cert->host_policy.mute_wavelink);
+      named_cert_node["host_touch_scale"] = host_policy::override_touch_scale_to_string(named_cert->host_policy.touch_scale);
       named_cert_node["last_seen"] = named_cert->last_seen;
 
       // Add "do" commands if available

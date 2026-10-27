@@ -51,3 +51,26 @@ TEST(HostPolicyStrings, BoolOverride) {
   EXPECT_EQ(host_policy::override_bool_from_string("inherit"), std::nullopt);
   EXPECT_EQ(host_policy::override_bool_from_string("maybe"), std::nullopt);
 }
+
+TEST(HostPolicyResolve, TouchScaleInheritsAndOverrides) {
+  settings_t global {display_e::stock, false, 150};
+  EXPECT_EQ(host_policy::resolve(global, {}).touch_scale, 150);
+  override_t off;
+  off.touch_scale = 0;
+  EXPECT_EQ(host_policy::resolve(global, off).touch_scale, 0);
+  override_t big;
+  big.touch_scale = 200;
+  EXPECT_EQ(host_policy::resolve({}, big).touch_scale, 200);
+}
+
+TEST(HostPolicyStrings, TouchScale) {
+  EXPECT_EQ(host_policy::override_touch_scale_to_string(std::nullopt), "inherit");
+  EXPECT_EQ(host_policy::override_touch_scale_to_string(0), "off");
+  EXPECT_EQ(host_policy::override_touch_scale_to_string(175), "175");
+  EXPECT_EQ(host_policy::override_touch_scale_from_string("off"), 0);
+  EXPECT_EQ(host_policy::override_touch_scale_from_string("150"), 150);
+  EXPECT_EQ(host_policy::override_touch_scale_from_string("inherit"), std::nullopt);
+  EXPECT_EQ(host_policy::override_touch_scale_from_string("130"), std::nullopt);
+  EXPECT_EQ(host_policy::override_touch_scale_from_string("150x"), std::nullopt);
+  EXPECT_EQ(host_policy::override_touch_scale_from_string("900"), std::nullopt);
+}

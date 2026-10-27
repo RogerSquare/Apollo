@@ -107,6 +107,8 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="8"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <StackPanel>
                 <ToggleButton x:Name="MonitorTile" Style="{StaticResource Tile}" Content="&#xE7F4;"
@@ -117,6 +119,12 @@
                 <ToggleButton x:Name="AudioTile" Style="{StaticResource Tile}"
                               AutomationProperties.Name="Desk audio" Click="Audio_Click"/>
                 <TextBlock x:Name="AudioLabel" Style="{StaticResource TileLabel}"/>
+            </StackPanel>
+            <!-- touch mode: bigger scaling + a roomier taskbar on the stream (scale: right-click menu or web UI) -->
+            <StackPanel Grid.Column="4">
+                <ToggleButton x:Name="TouchTile" Style="{StaticResource Tile}" Content="&#xE7C9;"
+                              AutomationProperties.Name="Touch mode" Click="Touch_Click"/>
+                <TextBlock x:Name="TouchLabel" Style="{StaticResource TileLabel}"/>
             </StackPanel>
         </Grid>
         <TextBlock x:Name="ScopeText" FontSize="11" Margin="16,10,16,16" TextWrapping="Wrap" TextAlignment="Center"

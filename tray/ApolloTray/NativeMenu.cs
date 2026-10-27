@@ -14,7 +14,8 @@ namespace ApolloTray;
 public sealed class NativeMenu : IDisposable
 {
     /// <summary>Checked items show Windows' radio dot, or a check mark for on/off items (Radio: false).</summary>
-    public sealed record Item(string Text, Action? Action, bool Enabled = true, bool Checked = false, bool Radio = true)
+    public sealed record Item(string Text, Action? Action, bool Enabled = true, bool Checked = false, bool Radio = true,
+        IReadOnlyList<Item>? Children = null)
     {
         public static readonly Item Separator = new("", null);
     }
@@ -37,28 +38,39 @@ public sealed class NativeMenu : IDisposable
     /// <summary>Show at the mouse pointer and run the chosen item's action (on the calling thread).</summary>
     public void Show(IReadOnlyList<Item> items)
     {
-        var menu = CreatePopupMenu();
+        var actions = new List<Action?>();
+        var menu = Build(items, actions);
         try
         {
-            for (int i = 0; i < items.Count; i++)
-            {
-                var it = items[i];
-                if (it == Item.Separator) AppendMenu(menu, MF_SEPARATOR, 0, null);
-                else
-                {
-                    var id = (uint)(i + 1);
-                    var check = it.Checked && !it.Radio ? MF_CHECKED : 0u;
-                    AppendMenu(menu, MF_STRING | check | (it.Enabled ? 0u : MF_GRAYED), id, it.Text);
-                    if (it.Checked && it.Radio) CheckMenuRadioItem(menu, id, id, id, MF_BYCOMMAND);
-                }
-            }
             GetCursorPos(out var pt);
             SetForegroundWindow(_owner.Handle);
             var cmd = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, pt.X, pt.Y, _owner.Handle, IntPtr.Zero);
             PostMessage(_owner.Handle, 0 /*WM_NULL*/, IntPtr.Zero, IntPtr.Zero);
-            if (cmd > 0 && cmd <= items.Count) items[cmd - 1].Action?.Invoke();
+            if (cmd > 0 && cmd <= actions.Count) actions[cmd - 1]?.Invoke();
         }
-        finally { DestroyMenu(menu); }
+        finally { DestroyMenu(menu); } // also destroys submenus
+    }
+
+    /// <summary>Command ids are positions in <paramref name="actions"/> + 1, across submenus.</summary>
+    static IntPtr Build(IReadOnlyList<Item> items, List<Action?> actions)
+    {
+        var menu = CreatePopupMenu();
+        foreach (var it in items)
+        {
+            if (it == Item.Separator) { AppendMenu(menu, MF_SEPARATOR, 0, null); continue; }
+            var enabled = it.Enabled ? 0u : MF_GRAYED;
+            if (it.Children != null)
+            {
+                AppendMenu(menu, MF_POPUP | enabled, (uint)Build(it.Children, actions), it.Text);
+                continue;
+            }
+            actions.Add(it.Action);
+            var id = (uint)actions.Count;
+            var check = it.Checked && !it.Radio ? MF_CHECKED : 0u;
+            AppendMenu(menu, MF_STRING | check | enabled, id, it.Text);
+            if (it.Checked && it.Radio) CheckMenuRadioItem(menu, id, id, id, MF_BYCOMMAND);
+        }
+        return menu;
     }
 
     /// <summary>
@@ -77,7 +89,7 @@ public sealed class NativeMenu : IDisposable
 
     public void Dispose() => _owner.Dispose();
 
-    const uint MF_STRING = 0x0, MF_GRAYED = 0x1, MF_CHECKED = 0x8, MF_SEPARATOR = 0x800, MF_BYCOMMAND = 0x0;
+    const uint MF_STRING = 0x0, MF_GRAYED = 0x1, MF_CHECKED = 0x8, MF_POPUP = 0x10, MF_SEPARATOR = 0x800, MF_BYCOMMAND = 0x0;
     const uint TPM_RIGHTBUTTON = 0x2, TPM_NONOTIFY = 0x80, TPM_RETURNCMD = 0x100;
 
     [StructLayout(LayoutKind.Sequential)] struct Point { public int X, Y; }

@@ -21,9 +21,9 @@ export const getClients = () => json('./api/clients/list')
  */
 export const setPolicy = (live, change) => json(live ? './api/session/host-policy' : './api/host-policy', change)
 
-/** Per-device override: display / mute_wavelink are 'inherit' or a value. */
-export const setClientPolicy = (uuid, display, muteWavelink) =>
-  json('./api/clients/host-policy', { uuid, display, mute_wavelink: muteWavelink })
+/** Per-device override: each is 'inherit' or a value (touch_scale: 'off' or '150'). */
+export const setClientPolicy = (uuid, display, muteWavelink, touchScale = 'inherit') =>
+  json('./api/clients/host-policy', { uuid, display, mute_wavelink: muteWavelink, touch_scale: touchScale })
 
 export const pair = (pin, name) => json('./api/pin', { pin, name })
 export const endStream = () => json('./api/apps/close', {})

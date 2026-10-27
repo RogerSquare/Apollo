@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -19,6 +20,7 @@ public partial class App : Application
     NativeMenu? _menu;
     DispatcherTimer _poll = null!;
     ApolloStatus _status = ApolloStatus.Offline;
+    TouchMode _touch = null!;
     bool _polling;
 
     const string ShowEvent = @"Local\ApolloTray.Show";
@@ -47,6 +49,7 @@ public partial class App : Application
         if (!IsDevBuild && !StartsWithWindows) SetStartWithWindows(true);
 
         _api = new ApolloApi();
+        _touch = new TouchMode();
         _flyout = new FlyoutWindow(_api);
         _flyout.RefreshRequested += () => _ = PollAsync();
 
@@ -77,6 +80,8 @@ public partial class App : Application
             if ((next.Stream?.Name) != (_status.Stream?.Name)) Log.Info(next.Stream != null ? $"Streaming to {next.Stream.Name}" : "Not streaming");
             var connected = next.Stream != null && next.Stream.Uuid != _status.Stream?.Uuid;
             _status = next;
+            // Before showing the flyout, so it opens already at the device's scale.
+            if (next.Reachable) _touch.Sync(next);
             _flyout.SetStatus(next);
             if (connected && ShowOnConnect)
             {
@@ -109,6 +114,9 @@ public partial class App : Application
                 Enabled: s.Reachable, Checked: s.Display != "exclusive", Radio: false),
             new("Desk audio on", () => _ = Toggle(mute: !s.MuteDesk),
                 Enabled: s.Reachable, Checked: !s.MuteDesk, Radio: false),
+            new("Touch mode", null, Enabled: s.Reachable, Children: TouchMode.Choices
+                .Select(v => new NativeMenu.Item(v == 0 ? "Off" : $"On · {v}% scaling", () => _ = Toggle(touch: v), Checked: s.TouchScale == v))
+                .ToList()),
             NativeMenu.Item.Separator,
         };
         if (s.Live) items.Add(new("Disconnect", () => _ = EndAsync()));
@@ -120,10 +128,10 @@ public partial class App : Application
         (_menu ??= new NativeMenu()).Show(items);
     }
 
-    async Task Toggle(string? display = null, bool? mute = null)
+    async Task Toggle(string? display = null, bool? mute = null, int? touch = null)
     {
-        var ok = await _api.SetPolicyAsync(_status.Live, display, mute);
-        Log.Info($"Menu {(_status.Live ? "live" : "default")} display={display ?? "-"} mute={mute?.ToString() ?? "-"}: {(ok ? "ok" : "FAILED")}");
+        var ok = await _api.SetPolicyAsync(_status.Live, display, mute, touch);
+        Log.Info($"Menu {(_status.Live ? "live" : "default")} display={display ?? "-"} mute={mute?.ToString() ?? "-"} touch={touch?.ToString() ?? "-"}: {(ok ? "ok" : "FAILED")}");
         await PollAsync();
     }
 
@@ -188,6 +196,7 @@ public partial class App : Application
     {
         Log.Info("Quitting");
         _poll.Stop();
+        _touch.Shutdown();
         _tray.Dispose();
         _menu?.Dispose();
         _api.Dispose();

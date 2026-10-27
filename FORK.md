@@ -56,7 +56,8 @@ Display behavior (only when Apollo uses a virtual display for the session):
   is disabled, since host policy uses it regardless.
 
 Storage:
-- Global: `sunshine.conf` keys `host_display_policy = stock|primary|exclusive`, `host_mute_wavelink = enabled|disabled`.
+- Global: `sunshine.conf` keys `host_display_policy = stock|primary|exclusive`, `host_mute_wavelink = enabled|disabled`,
+  `host_touch_scale = off|100-300` (steps of 25; see Touch mode below).
 - Per client: `host_display` / `host_mute_wavelink` on each `named_devices` entry in `sunshine_state.json`,
   only written when overridden. Stock Apollo ignores these keys (and drops them if it rewrites the file).
 
@@ -94,7 +95,7 @@ accepts it in the `X-Apollo-Token` header **from loopback only**. Re-read the fi
 restart). Browsers can't read the file, and a page can't send the custom header cross-origin without a
 CORS preflight Apollo never grants.
 
-`/api/clients/list` also returns `host_display` and `host_mute_wavelink` per client. The existing
+`/api/clients/list` also returns `host_display`, `host_mute_wavelink` and `host_touch_scale` per client. The existing
 `/api/clients/update` endpoint is unchanged and never touches the override.
 
 ## Tray app (`tray/ApolloTray`)
@@ -109,7 +110,8 @@ right-click a native menu. Talks to Apollo only through the local token API abov
 - When a device connects the flyout opens by itself on the **streamed display** (from `app.display_name`
   in `/api/session`, placed per monitor in pixels), so it can be adjusted from the device; it closes
   after 15 s unless used. Toggle: menu > "Show when a device connects" (HKCU\Software\ApolloTray).
-- Menu: the same two toggles, Disconnect, Open Apollo settings, Start with Windows, Quit.
+- **Touch mode** tile (`touch_scale`): see below. The menu's Touch mode submenu picks the scale.
+- Menu: the same toggles, Disconnect, Open Apollo settings, Start with Windows, Quit.
 - Log: `%LOCALAPPDATA%\ApolloTray\apollotray.log`. Re-launching the exe opens the flyout; `--menu` opens the menu.
 
 ```powershell
@@ -119,6 +121,23 @@ dotnet publish tray/ApolloTray -c Release -r win-x64 --self-contained false -o "
 ```
 
 Installed copies add themselves to HKCU Run on first start; builds under `bin\` never do.
+
+### Touch mode
+
+For small touch screens (the Switch). Apollo only stores `touch_scale` (global default + per device, also
+settable live); the tray applies it, because these are per-user settings and Apollo runs as SYSTEM.
+While a device with touch mode is streaming to a virtual display (not while paused):
+
+- the stream's display scaling is set to the chosen percent (DisplayConfig's undocumented DPI get/set,
+  relative to the display's recommended step; clamped to what Windows allows for that resolution,
+  e.g. 175% max at 1080p)
+- taskbar: search box -> search icon, Task View hidden (`WM_SETTINGCHANGE "TraySettings"` applies it live)
+- touch keyboard opens on tap even with a keyboard attached (`TabletTip.7` TouchKeyboardTapInvoke=2)
+
+Originals go to `%LOCALAPPDATA%\ApolloTray	ouch-restore.json` before anything changes and are put back
+when the stream stops or touch mode is turned off; a leftover file (crash, reboot) is restored on the
+next tray start. Scaling is restored live if the display still exists, otherwise in
+`HKCU\Control Panel\Desktop\PerMonitorSettings`.
 
 ## Tests
 

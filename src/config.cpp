@@ -1218,6 +1218,11 @@ namespace config {
         host.display = *parsed;
       }
       bool_f(vars, "host_mute_wavelink", host.mute_wavelink);
+      std::string touch;
+      string_f(vars, "host_touch_scale", touch);
+      if (auto parsed = host_policy::touch_scale_from_string(touch)) {
+        host.touch_scale = *parsed;
+      }
     }
 
     path_f(vars, "pkey", nvhttp.pkey);

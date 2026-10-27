@@ -1052,6 +1052,7 @@ namespace confighttp {
     return {
       {"display", std::string {host_policy::to_string(settings.display)}},
       {"mute_wavelink", settings.mute_wavelink},
+      {"touch_scale", settings.touch_scale},
     };
   }
 
@@ -1061,11 +1062,11 @@ namespace confighttp {
    * @code{.json}
    * {
    *   "status": true,
-   *   "global": { "display": "stock|primary|exclusive", "mute_wavelink": false },
+   *   "global": { "display": "stock|primary|exclusive", "mute_wavelink": false, "touch_scale": 0 },
    *   "clients": [ {
    *     "uuid": "<uuid>", "name": "<name>",
-   *     "override": { "display": "inherit|stock|primary|exclusive", "mute_wavelink": "inherit|on|off" },
-   *     "effective": { "display": "...", "mute_wavelink": true }
+   *     "override": { "display": "inherit|stock|primary|exclusive", "mute_wavelink": "inherit|on|off", "touch_scale": "inherit|off|150" },
+   *     "effective": { "display": "...", "mute_wavelink": true, "touch_scale": 150 }
    *   } ]
    * }
    * @endcode
@@ -1088,6 +1089,7 @@ namespace confighttp {
         {"override", {
           {"display", client.value("host_display", "inherit")},
           {"mute_wavelink", client.value("host_mute_wavelink", "inherit")},
+          {"touch_scale", client.value("host_touch_scale", "inherit")},
         }},
         {"effective", host_settings_to_json(nvhttp::effective_host_policy(uuid))},
       });
@@ -1105,7 +1107,7 @@ namespace confighttp {
    *        Takes effect for the next session without a restart, and is persisted to sunshine.conf.
    *
    * @code{.json}
-   * { "display": "stock|primary|exclusive", "mute_wavelink": true }
+   * { "display": "stock|primary|exclusive", "mute_wavelink": true, "touch_scale": 150 }
    * @endcode
    *
    * @api_examples{/api/host-policy| POST| {"display":"exclusive"}}
@@ -1134,10 +1136,19 @@ namespace confighttp {
       if (input_tree.contains("mute_wavelink")) {
         updated.mute_wavelink = input_tree["mute_wavelink"].get<bool>();
       }
+      if (input_tree.contains("touch_scale")) {
+        auto scale = input_tree["touch_scale"].get<int>();
+        if (!host_policy::valid_touch_scale(scale)) {
+          bad_request(response, request, "touch_scale must be 0 or 100-300 in steps of 25");
+          return;
+        }
+        updated.touch_scale = scale;
+      }
 
       set_config_file_values({
         {"host_display_policy", std::string {host_policy::to_string(updated.display)}},
         {"host_mute_wavelink", updated.mute_wavelink ? "enabled" : "disabled"},
+        {"host_touch_scale", host_policy::touch_scale_to_string(updated.touch_scale)},
       });
       config::host = updated;
 
@@ -1155,7 +1166,7 @@ namespace confighttp {
    * @brief Replace a paired client's host policy override (fork). Omitted fields mean "inherit".
    *
    * @code{.json}
-   * { "uuid": "<uuid>", "display": "inherit|stock|primary|exclusive", "mute_wavelink": "inherit|on|off" }
+   * { "uuid": "<uuid>", "display": "inherit|stock|primary|exclusive", "mute_wavelink": "inherit|on|off", "touch_scale": "inherit|off|150" }
    * @endcode
    *
    * @api_examples{/api/clients/host-policy| POST| {"uuid":"1234","display":"primary","mute_wavelink":"inherit"}}
@@ -1174,12 +1185,14 @@ namespace confighttp {
       std::string uuid = input_tree.value("uuid", "");
       std::string display = input_tree.value("display", "inherit");
       std::string mute = input_tree.value("mute_wavelink", "inherit");
+      std::string touch = input_tree.value("touch_scale", "inherit");
 
       host_policy::override_t policy;
       policy.display = host_policy::override_display_from_string(display);
       policy.mute_wavelink = host_policy::override_bool_from_string(mute);
-      if ((!policy.display && display != "inherit") || (!policy.mute_wavelink && mute != "inherit")) {
-        bad_request(response, request, "display must be inherit|stock|primary|exclusive, mute_wavelink must be inherit|on|off");
+      policy.touch_scale = host_policy::override_touch_scale_from_string(touch);
+      if ((!policy.display && display != "inherit") || (!policy.mute_wavelink && mute != "inherit") || (!policy.touch_scale && touch != "inherit")) {
+        bad_request(response, request, "display must be inherit|stock|primary|exclusive, mute_wavelink must be inherit|on|off, touch_scale must be inherit|off|100-300");
         return;
       }
 
@@ -1260,8 +1273,10 @@ namespace confighttp {
    *        Omitted fields keep their current value. Fails with status false when nothing runs.
    *
    * @code{.json}
-   * { "display": "stock|primary|exclusive", "mute_wavelink": true }
+   * { "display": "stock|primary|exclusive", "mute_wavelink": true, "touch_scale": 150 }
    * @endcode
+   *
+   * Touch mode is applied by the tray app (it runs as the signed-in user); Apollo only stores it.
    *
    * @api_examples{/api/session/host-policy| POST| {"display":"exclusive"}}
    */
@@ -1300,6 +1315,15 @@ namespace confighttp {
         mute = input_tree["mute_wavelink"].get<bool>();
         policy.mute_wavelink = *mute;
       }
+      std::optional<int> touch;
+      if (input_tree.contains("touch_scale")) {
+        touch = input_tree["touch_scale"].get<int>();
+        if (!host_policy::valid_touch_scale(*touch)) {
+          bad_request(response, request, "touch_scale must be 0 or 100-300 in steps of 25");
+          return;
+        }
+        policy.touch_scale = *touch;
+      }
 
       proc::proc.set_live_host_policy(policy);
 
@@ -1310,6 +1334,9 @@ namespace confighttp {
         }
         if (mute) {
           stored->mute_wavelink = mute;
+        }
+        if (touch) {
+          stored->touch_scale = touch;
         }
         nvhttp::update_device_host_policy(status->client_uuid, *stored);
       }

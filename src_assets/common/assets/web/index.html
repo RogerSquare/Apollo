@@ -8,7 +8,7 @@
     .home-hero { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
     .home-disc { width: 56px; height: 56px; border-radius: 50%; background: var(--fl-sel); display: flex; align-items: center; justify-content: center; flex: none; color: var(--fl-text-2); }
     .home-disc.live { color: var(--fl-accent); }
-    .home-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .home-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
     .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
     .home-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
     .home-kv > span:first-child { color: var(--fl-text-2); }
@@ -61,6 +61,13 @@
             <span>{{ $t('fork.desk_audio') }}</span>
           </button>
           <div class="fl-muted text-center" style="font-size: 12px;">{{ audioOn ? $t('fork.audio_on_desc') : $t('fork.audio_off_desc') }}</div>
+        </div>
+        <div class="d-flex flex-column gap-2">
+          <button type="button" class="fl-tile" :aria-pressed="touchOn ? 'true' : 'false'" :disabled="busy" @click="toggleTouch">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M7 8.5V3.2a1.2 1.2 0 0 1 2.4 0v4.6l3.4.7c.8.2 1.3.9 1.2 1.7l-.6 4.3a1.6 1.6 0 0 1-1.6 1.4H8.4a1.6 1.6 0 0 1-1.3-.7L4.4 11.4a1.1 1.1 0 0 1 1.6-1.5z"/></svg>
+            <span>{{ $t('fork.touch_mode') }}</span>
+          </button>
+          <div class="fl-muted text-center" style="font-size: 12px;">{{ touchOn ? $t('fork.touch_on_desc', { n: policy.touch_scale }) : $t('fork.touch_off_desc') }}</div>
         </div>
       </div>
       <div class="fl-caption">{{ scopeText }}</div>
@@ -214,6 +221,17 @@
       // Monitor on = the Acer stays extended beside the stream; off = it is detached.
       toggleMonitor() { this.change({ display: this.monitorOn ? 'exclusive' : 'primary' }) },
       toggleAudio() { this.change({ mute_wavelink: this.audioOn }) },
+      // On = the scale this device (or the default) used last; pick others on the Devices page.
+      toggleTouch() {
+        if (this.touchOn) {
+          try { localStorage.setItem('touchScale', String(this.policy.touch_scale)) } catch (e) {}
+          this.change({ touch_scale: 0 })
+        } else {
+          let last = 150
+          try { last = +localStorage.getItem('touchScale') || 150 } catch (e) {}
+          this.change({ touch_scale: last })
+        }
+      },
       async disconnect() {
         this.busy = true
         try { await endStream() } catch (e) { console.error(e) }
@@ -236,11 +254,13 @@
         if (c.connected) parts.push(this.$t('fork.streaming_now'))
         const display = c.host_display && c.host_display !== 'inherit' ? c.host_display : null
         const mute = c.host_mute_wavelink && c.host_mute_wavelink !== 'inherit' ? c.host_mute_wavelink : null
-        if (!display && !mute) {
+        const touch = c.host_touch_scale && c.host_touch_scale !== 'inherit' ? c.host_touch_scale : null
+        if (!display && !mute && !touch) {
           parts.push(this.$t('fork.uses_defaults'))
         } else {
           if (display) parts.push(display === 'exclusive' ? this.$t('fork.monitor_off') : display === 'primary' ? this.$t('fork.monitor_on') : this.$t('fork.monitor_stock'))
           if (mute) parts.push(mute === 'on' ? this.$t('fork.desk_audio_off') : this.$t('fork.desk_audio_on'))
+          if (touch) parts.push(touch === 'off' ? this.$t('fork.touch_off') : this.$t('fork.touch_summary', { n: touch }))
         }
         return parts.join(' · ')
       },
@@ -257,6 +277,7 @@
       },
       monitorOn() { return this.policy.display !== 'exclusive' },
       audioOn() { return !this.policy.mute_wavelink },
+      touchOn() { return (this.policy.touch_scale || 0) > 0 },
       displayApplies() { return !this.live || this.session.app.virtual_display },
       heroTitle() {
         if (this.stream) return this.stream.name

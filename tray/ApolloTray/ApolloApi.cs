@@ -11,15 +11,17 @@ namespace ApolloTray;
 public sealed record StreamInfo(string Uuid, string Name, int Width, int Height, int Fps, int BitrateKbps, string Codec, bool Hdr, DateTimeOffset StartedAt);
 
 /// <summary>The running app and the host policy it is using (Apollo's /api/session "app").</summary>
-public sealed record AppInfo(string Name, string ClientName, bool VirtualDisplay, bool Paused, string Display, bool MuteDesk, string? DisplayName);
+public sealed record AppInfo(string Name, string ClientName, bool VirtualDisplay, bool Paused, string Display, bool MuteDesk, int TouchScale, string? DisplayName);
 
-public sealed record ApolloStatus(bool Reachable, StreamInfo? Stream, AppInfo? App, string GlobalDisplay, bool GlobalMuteDesk)
+public sealed record ApolloStatus(bool Reachable, StreamInfo? Stream, AppInfo? App, string GlobalDisplay, bool GlobalMuteDesk, int GlobalTouchScale)
 {
-    public static readonly ApolloStatus Offline = new(false, null, null, "stock", false);
+    public static readonly ApolloStatus Offline = new(false, null, null, "stock", false, 0);
     /// <summary>Something is running, so toggles change it live (also while paused between clients).</summary>
     public bool Live => App != null;
     public string Display => App?.Display ?? GlobalDisplay;
     public bool MuteDesk => App?.MuteDesk ?? GlobalMuteDesk;
+    /// <summary>Touch mode scaling in percent, 0 = off.</summary>
+    public int TouchScale => App?.TouchScale ?? GlobalTouchScale;
 }
 
 /// <summary>
@@ -72,12 +74,12 @@ public sealed class ApolloApi : IDisposable
                 var p = a.GetProperty("policy");
                 app = new AppInfo(a.GetProperty("name").GetString() ?? "", a.GetProperty("client_name").GetString() ?? "",
                     a.GetProperty("virtual_display").GetBoolean(), a.GetProperty("paused").GetBoolean(),
-                    p.GetProperty("display").GetString() ?? "stock", p.GetProperty("mute_wavelink").GetBoolean(),
+                    p.GetProperty("display").GetString() ?? "stock", p.GetProperty("mute_wavelink").GetBoolean(), TouchScaleOf(p),
                     a.TryGetProperty("display_name", out var dn) && dn.GetString() is { Length: > 0 } d ? d : null);
             }
 
             var g = root.GetProperty("global");
-            return new ApolloStatus(true, stream, app, g.GetProperty("display").GetString() ?? "stock", g.GetProperty("mute_wavelink").GetBoolean());
+            return new ApolloStatus(true, stream, app, g.GetProperty("display").GetString() ?? "stock", g.GetProperty("mute_wavelink").GetBoolean(), TouchScaleOf(g));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException)
         {
@@ -85,12 +87,16 @@ public sealed class ApolloApi : IDisposable
         }
     }
 
+    // Older Apollo builds have no touch mode.
+    static int TouchScaleOf(JsonElement policy) => policy.TryGetProperty("touch_scale", out var t) && t.ValueKind == JsonValueKind.Number ? t.GetInt32() : 0;
+
     /// <summary>Live (running session, remembered for its device) or the global default when idle.</summary>
-    public Task<bool> SetPolicyAsync(bool live, string? display = null, bool? muteDesk = null)
+    public Task<bool> SetPolicyAsync(bool live, string? display = null, bool? muteDesk = null, int? touchScale = null)
     {
         var body = new System.Collections.Generic.Dictionary<string, object>();
         if (display != null) body["display"] = display;
         if (muteDesk != null) body["mute_wavelink"] = muteDesk.Value;
+        if (touchScale != null) body["touch_scale"] = touchScale.Value;
         return PostOkAsync(live ? "api/session/host-policy" : "api/host-policy", body);
     }
 

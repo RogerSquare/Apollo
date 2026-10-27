@@ -140,6 +140,16 @@
           <button type="button" :aria-pressed="globalPolicy.mute_wavelink ? 'true' : 'false'" @click="setGlobal({ mute_wavelink: true })">{{ $t('fork.off') }}</button>
         </div>
       </div>
+      <div class="fl-row">
+        <svg class="row-icon" width="20" height="20" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M7 8.5V3.2a1.2 1.2 0 0 1 2.4 0v4.6l3.4.7c.8.2 1.3.9 1.2 1.7l-.6 4.3a1.6 1.6 0 0 1-1.6 1.4H8.4a1.6 1.6 0 0 1-1.3-.7L4.4 11.4a1.1 1.1 0 0 1 1.6-1.5z"/></svg>
+        <div class="fl-row-text">
+          <label class="fl-row-title" for="touch-default">{{ $t('fork.touch_mode') }}</label>
+          <div class="fl-row-desc">{{ $t('fork.touch_mode_desc') }}</div>
+        </div>
+        <select id="touch-default" class="form-select" style="width: auto;" :value="globalPolicy.touch_scale || 0" @change="setGlobal({ touch_scale: +$event.target.value })">
+          <option v-for="v in touchScales" :key="v" :value="v">{{ touchLabel(v) }}</option>
+        </select>
+      </div>
     </section>
 
     <!-- Paired devices -->
@@ -191,6 +201,17 @@
               <option value="inherit">{{ $t('fork.use_default', { value: globalPolicy.mute_wavelink ? $t('fork.off') : $t('fork.on') }) }}</option>
               <option value="off">{{ $t('fork.on') }}</option>
               <option value="on">{{ $t('fork.off') }}</option>
+            </select>
+          </div>
+
+          <div class="exp-row">
+            <div class="fl-row-text">
+              <label class="fl-row-title" :for="'touch-' + c.uuid">{{ $t('fork.touch_mode') }}</label>
+              <div class="fl-row-desc">{{ $t('fork.touch_mode_device_desc') }}</div>
+            </div>
+            <select :id="'touch-' + c.uuid" class="form-select exp-ctl" v-model="c.draft.host_touch_scale">
+              <option value="inherit">{{ $t('fork.use_default', { value: touchLabel(globalPolicy.touch_scale || 0) }) }}</option>
+              <option v-for="v in touchScales" :key="v" :value="v ? String(v) : 'off'">{{ touchLabel(v) }}</option>
             </select>
           </div>
 
@@ -378,6 +399,7 @@
     name: c.name,
     host_display: c.host_display || 'inherit',
     host_mute_wavelink: c.host_mute_wavelink || 'inherit',
+    host_touch_scale: c.host_touch_scale || 'inherit',
     perm: c.perm,
     display_mode: c.display_mode || '',
     always_use_virtual_display: !!c.always_use_virtual_display,
@@ -401,7 +423,8 @@
         ...otpDefaults(),
         permissionGroups,
         clients: [],
-        globalPolicy: { display: 'stock', mute_wavelink: false },
+        globalPolicy: { display: 'stock', mute_wavelink: false, touch_scale: 0 },
+        touchScales: [0, 125, 150, 175, 200],
         unpairAllPressed: false,
         unpairAllStatus: null,
         confirmUnpairAll: false,
@@ -524,6 +547,10 @@
         }
       },
 
+      touchLabel(v) {
+        return v ? this.$t('fork.touch_on', { n: v }) : this.$t('fork.off')
+      },
+
       // ---- devices ---------------------------------------------------------------------------
       toggle(c) {
         c.open = !c.open
@@ -535,11 +562,13 @@
         else if (c.last_seen) parts.push(this.$t('fork.last_connected', { when: this.ago(c.last_seen) }))
         const d = c.host_display || 'inherit'
         const m = c.host_mute_wavelink || 'inherit'
-        if (d === 'inherit' && m === 'inherit') {
+        const t = c.host_touch_scale || 'inherit'
+        if (d === 'inherit' && m === 'inherit' && t === 'inherit') {
           parts.push(this.$t('fork.uses_defaults'))
         } else {
           if (d !== 'inherit') parts.push(d === 'exclusive' ? this.$t('fork.monitor_off') : d === 'primary' ? this.$t('fork.monitor_on') : this.$t('fork.monitor_stock'))
           if (m !== 'inherit') parts.push(m === 'on' ? this.$t('fork.desk_audio_off') : this.$t('fork.desk_audio_on'))
+          if (t !== 'inherit') parts.push(t === 'off' ? this.$t('fork.touch_off') : this.$t('fork.touch_summary', { n: t }))
         }
         parts.push(this.accessLabel(c.perm))
         return parts.join(' · ')
@@ -601,7 +630,7 @@
             })
           }).then((x) => x.json())
           if (!r.status) throw new Error(r.message || 'update failed')
-          const p = await setClientPolicy(c.uuid, d.host_display, d.host_mute_wavelink)
+          const p = await setClientPolicy(c.uuid, d.host_display, d.host_mute_wavelink, d.host_touch_scale)
           if (!p.status) throw new Error('host policy update failed')
           c.msg = this.$t('fork.saved')
           c.msgOk = true

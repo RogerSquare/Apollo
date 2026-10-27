@@ -27,6 +27,7 @@ namespace host_policy {
   struct settings_t {
     display_e display = display_e::stock;
     bool mute_wavelink = false;
+    int touch_scale = 0;  ///< Touch mode: display scaling in percent for the stream, 0 = off.
 
     bool operator==(const settings_t &) const = default;
   };
@@ -37,6 +38,7 @@ namespace host_policy {
   struct override_t {
     std::optional<display_e> display;
     std::optional<bool> mute_wavelink;
+    std::optional<int> touch_scale;
 
     bool operator==(const override_t &) const = default;
   };
@@ -56,5 +58,14 @@ namespace host_policy {
   std::optional<display_e> override_display_from_string(std::string_view value);
   std::string override_bool_to_string(const std::optional<bool> &value);
   std::optional<bool> override_bool_from_string(std::string_view value);
+
+  /**
+   * @brief Touch mode scale: 0 (off) or 100-300 in steps of 25, matching Windows' scaling steps.
+   */
+  bool valid_touch_scale(int scale);
+  std::optional<int> touch_scale_from_string(std::string_view value);  ///< "off" or "150"
+  std::string touch_scale_to_string(int scale);
+  std::string override_touch_scale_to_string(const std::optional<int> &scale);  ///< "inherit", "off" or "150"
+  std::optional<int> override_touch_scale_from_string(std::string_view value);
 
 }  // namespace host_policy

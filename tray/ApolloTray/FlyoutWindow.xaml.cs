@@ -110,6 +110,10 @@ public partial class FlyoutWindow : Window
         AudioTile.IsChecked = !s.MuteDesk;
         AudioTile.Content = s.MuteDesk ? "" : ""; // mute / volume
         AudioLabel.Text = s.MuteDesk ? "Desk audio off" : "Desk audio on";
+        TouchTile.IsEnabled = s.Reachable;
+        TouchTile.IsChecked = s.TouchScale > 0;
+        TouchLabel.Text = s.TouchScale > 0 ? $"Touch {s.TouchScale}%" : "Touch off";
+        TouchTile.ToolTip = "Bigger scaling and a roomier taskbar on the stream, for small touch screens";
 
         ScopeText.Text = !s.Reachable ? ""
             : s.Live ? $"Applies now and is remembered for {(stream?.Name ?? s.App!.ClientName)}"
@@ -148,6 +152,13 @@ public partial class FlyoutWindow : Window
     {
         var mute = AudioTile.IsChecked != true;
         await Change(() => _api.SetPolicyAsync(_status.Live, muteDesk: mute), $"desk audio -> {(mute ? "off" : "on")}");
+    }
+
+    async void Touch_Click(object sender, RoutedEventArgs e)
+    {
+        // On = the scale used last time (pick another from the tray menu or the web UI).
+        var scale = TouchTile.IsChecked == true ? TouchMode.LastScale : 0;
+        await Change(() => _api.SetPolicyAsync(_status.Live, touchScale: scale), $"touch -> {scale}");
     }
 
     async System.Threading.Tasks.Task Change(Func<System.Threading.Tasks.Task<bool>> call, string what)
