@@ -97,6 +97,26 @@ CORS preflight Apollo never grants.
 `/api/clients/list` also returns `host_display` and `host_mute_wavelink` per client. The existing
 `/api/clients/update` endpoint is unchanged and never touches the override.
 
+## Tray app (`tray/ApolloTray`)
+
+C# .NET 10 WPF (Fluent) tray app in the same style as Handoff: left-click opens a Windows 11 flyout,
+right-click a native menu. Talks to Apollo only through the local token API above.
+
+- Flyout: who's streaming (resolution, fps, codec, bitrate, duration) + Disconnect; **Desk monitor**
+  tile (on = `primary`, off = `exclusive`) and **Desk audio** tile (`mute_wavelink`, acted on by Handoff).
+  While something runs the tiles change the session live and save it for that device; when idle they
+  set the global defaults. Pair a device: PIN + name -> `POST /api/pin`.
+- Menu: the same two toggles, Disconnect, Open Apollo settings, Start with Windows, Quit.
+- Log: `%LOCALAPPDATA%\ApolloTray\apollotray.log`. Re-launching the exe opens the flyout; `--menu` opens the menu.
+
+```powershell
+# install / update (quit the running tray first)
+Get-Process ApolloTray -EA SilentlyContinue | Stop-Process
+dotnet publish tray/ApolloTray -c Release -r win-x64 --self-contained false -o "$env:LOCALAPPDATA\Programs\ApolloTray"
+```
+
+Installed copies add themselves to HKCU Run on first start; builds under `bin\` never do.
+
 ## Tests
 
 ```powershell

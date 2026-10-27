@@ -54,7 +54,7 @@ namespace proc {
 
   // Fork: guards proc_t's host policy state (see process.h). Recursive because terminate()
   // can run from inside execute(). File-scope so proc_t stays movable.
-  static std::recursive_mutex host_mutex;
+  static std::recursive_timed_mutex host_mutex;
 
   proc_t proc;
 
@@ -633,19 +633,32 @@ namespace proc {
   }
 
   std::optional<proc_t::host_status_t> proc_t::host_status() {
-    std::lock_guard lg {host_mutex};
-    if (!running()) {
-      return std::nullopt;
+    // Status is polled by the tray app and Handoff. A topology change can hold host_mutex for
+    // seconds, so don't wait for it: answer with the last snapshot instead.
+    static std::mutex cache_mutex;
+    static std::optional<host_status_t> cache;
+
+    std::unique_lock lg {host_mutex, std::defer_lock};
+    if (!lg.try_lock_for(200ms)) {
+      std::lock_guard cache_lg {cache_mutex};
+      return cache;
     }
-    return host_status_t {
-      _host_client_uuid,
-      _host_client_name,
-      _app_name,
-      this->virtual_display,
-      _host_display_paused,
-      _live_policy,
-      _host_display_paused ? host_policy::display_e::stock : _host_display,
-    };
+
+    std::optional<host_status_t> status;
+    if (running()) {
+      status = host_status_t {
+        _host_client_uuid,
+        _host_client_name,
+        _app_name,
+        this->virtual_display,
+        _host_display_paused,
+        _live_policy,
+        _host_display_paused ? host_policy::display_e::stock : _host_display,
+      };
+    }
+    std::lock_guard cache_lg {cache_mutex};
+    cache = status;
+    return status;
   }
 
   bool proc_t::set_live_host_policy(const host_policy::settings_t &policy) {
