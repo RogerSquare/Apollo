@@ -11,6 +11,9 @@
 // lib includes
 #include <display_device/types.h>
 
+// local includes
+#include "host_policy.h"
+
 // forward declarations
 namespace platf {
   class deinit_t;
@@ -100,6 +103,27 @@ namespace display_device {
    * @examples_end
    */
   void revert_configuration();
+
+  /**
+   * @brief Make the session's (virtual) output primary or the only active display, per host policy (fork).
+   *
+   * Only the device topology is changed; resolution, refresh rate and HDR are left to Apollo's
+   * virtual display handling. The initial state is persisted, so it is restored by
+   * `revert_configuration_now()` or, after a crash, on the next start.
+   *
+   * @param device_id Device id of the virtual display (as returned by `map_display_name`).
+   * @param display `primary` or `exclusive`; `stock` is a no-op.
+   */
+  void apply_host_display_policy(const std::string &device_id, host_policy::display_e display);
+
+  /**
+   * @brief Revert to the initial display state right now, in the calling thread (fork).
+   *
+   * Unlike `revert_configuration()` there is no delay, so it can run before the virtual display
+   * is removed, while every device in the saved topology still exists. Keeps retrying in the
+   * background if the first attempt fails.
+   */
+  void revert_configuration_now();
 
   /**
    * @brief Reset the persistence and currently held initial display state.

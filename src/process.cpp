@@ -334,12 +334,20 @@ namespace proc {
       }
     }
 
-    display_device::configure_display(config::video, *launch_session);
+    _host_display = host_policy::display_e::stock;
+    _host_display_paused = false;
+    if (this->virtual_display && launch_session->host_policy.display != host_policy::display_e::stock) {
+      // Fork: host policy owns the topology for this session. Keep the persisted initial state
+      // (instead of resetting it) so terminate() and pause() can restore it.
+      apply_host_display(launch_session->host_policy.display);
+    } else {
+      display_device::configure_display(config::video, *launch_session);
 
-    // We should not preserve display state when using virtual display.
-    // It is already handled by Windows properly.
-    if (this->virtual_display) {
-      display_device::reset_persistence();
+      // We should not preserve display state when using virtual display.
+      // It is already handled by Windows properly.
+      if (this->virtual_display) {
+        display_device::reset_persistence();
+      }
     }
 
 #else
@@ -601,8 +609,27 @@ namespace proc {
     return 0;
   }
 
-  void proc_t::resume() {
+  void proc_t::apply_host_display(host_policy::display_e display) {
+    const auto device_id = config::video.output_name;  // Points at the virtual display while one is in use.
+    display_device::apply_host_display_policy(device_id, display);
+    _host_display = display;
+    _host_display_paused = false;
+  }
+
+  void proc_t::resume(const std::optional<host_policy::settings_t> &resuming_policy) {
     BOOST_LOG(info) << "Session resuming for app [" << _app_name << "].";
+
+    // Fork: re-apply the topology pause() reverted, using the resuming client's policy.
+    if (_host_display_paused && this->virtual_display) {
+      const auto display = resuming_policy ? resuming_policy->display : _host_display;
+      if (display != host_policy::display_e::stock) {
+        apply_host_display(display);
+      } else {
+        // The resuming client wants stock behavior; the topology is already restored.
+        _host_display = host_policy::display_e::stock;
+        _host_display_paused = false;
+      }
+    }
 
     if (!_app.state_cmds.empty()) {
       auto exec_thread = std::thread([cmd_list = _app.state_cmds, app_working_dir = _app.working_dir, _env = _env]() mutable {
@@ -658,6 +685,13 @@ namespace proc {
     }
 
     BOOST_LOG(info) << "Session pausing for app [" << _app_name << "].";
+
+    // Fork: nobody is watching the virtual display, so give the desk its monitor back.
+    if (_host_display != host_policy::display_e::stock && !_host_display_paused) {
+      BOOST_LOG(info) << "Host policy: restoring display topology while paused"sv;
+      display_device::revert_configuration_now();
+      _host_display_paused = true;
+    }
 
     if (!_app.state_cmds.empty()) {
       auto exec_thread = std::thread([cmd_list = _app.state_cmds, app_working_dir = _app.working_dir, _env = _env]() mutable {
@@ -757,6 +791,20 @@ namespace proc {
     }
 
     bool used_virtual_display = vDisplayDriverStatus == VDISPLAY::DRIVER_STATUS::OK && _launch_session && _launch_session->virtual_display;
+
+    // Fork: restore the host's topology while the virtual display still exists, so every device
+    // in the saved state is present. Reverting after removal (the stock order) can't fully apply it.
+    bool host_display_reverted = false;
+    if (_host_display != host_policy::display_e::stock) {
+      if (!_host_display_paused) {
+        BOOST_LOG(info) << "Host policy: restoring display topology"sv;
+        display_device::revert_configuration_now();
+      }
+      _host_display = host_policy::display_e::stock;
+      _host_display_paused = false;
+      host_display_reverted = true;
+    }
+
     if (used_virtual_display) {
       if (VDISPLAY::removeVirtualDisplay(_launch_session->display_guid)) {
         BOOST_LOG(info) << "Virtual Display removed successfully";
@@ -770,7 +818,9 @@ namespace proc {
     // Only show the Stopped notification if we actually have an app to stop
     // Since terminate() is always run when a new app has started
     if (proc::proc.get_last_run_app_name().length() > 0 && has_run) {
-      if (used_virtual_display) {
+      if (host_display_reverted) {
+        // Already restored above; nothing left to undo.
+      } else if (used_virtual_display) {
         display_device::reset_persistence();
       } else {
         display_device::revert_configuration();

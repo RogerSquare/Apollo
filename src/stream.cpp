@@ -27,6 +27,7 @@ extern "C" {
 #include "input.h"
 #include "logging.h"
 #include "network.h"
+#include "nvhttp.h"
 #include "platform/common.h"
 #include "process.h"
 #include "stream.h"
@@ -2120,7 +2121,7 @@ namespace stream {
       // If this is the first session, invoke the platform callbacks
       if (++running_sessions == 1) {
         platf::streaming_will_start();
-        proc::proc.resume();
+        proc::proc.resume(nvhttp::effective_host_policy(session.device_uuid));
       }
 
       if (!session.do_cmds.empty()) {

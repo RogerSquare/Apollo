@@ -461,6 +461,11 @@ namespace nvhttp {
 
     launch_session->device_name = named_cert_p->name.empty() ? "ApolloDisplay"s : named_cert_p->name;
     launch_session->unique_id = named_cert_p->uuid;
+    // Web UI launches use the host's own uuid, which resolves to the global default.
+    launch_session->host_policy = effective_host_policy(named_cert_p->uuid);
+    BOOST_LOG(info) << "Host policy for client ["sv << launch_session->device_name << "]: display="sv
+                    << host_policy::to_string(launch_session->host_policy.display)
+                    << ", mute_wavelink="sv << launch_session->host_policy.mute_wavelink;
     launch_session->perm = named_cert_p->perm;
     launch_session->enable_sops = util::from_view(get_arg(args, "sops", "0"));
     launch_session->surround_info = util::from_view(get_arg(args, "surroundAudioInfo", "196610"));

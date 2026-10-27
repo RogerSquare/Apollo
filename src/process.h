@@ -136,11 +136,24 @@ namespace proc {
     std::string get_last_run_app_name();
     std::string get_running_app_uuid();
     boost::process::v1::environment get_env();
-    void resume();
+    /**
+     * @param resuming_policy Host policy of the client that is resuming the session (fork).
+     *        Re-applies the display topology that pause() reverted.
+     */
+    void resume(const std::optional<host_policy::settings_t> &resuming_policy = std::nullopt);
     void pause();
     void terminate(bool immediate = false, bool needs_refresh = true);
 
   private:
+    /**
+     * @brief Apply the host policy's display topology to the current virtual display (fork).
+     */
+    void apply_host_display(host_policy::display_e display);
+
+    // Fork: host policy display topology state for the running app.
+    host_policy::display_e _host_display = host_policy::display_e::stock;  ///< Currently applied (stock = none).
+    bool _host_display_paused = false;  ///< Reverted by pause(), to be re-applied by resume().
+
     int _app_id = 0;
     std::string _app_name;
 
