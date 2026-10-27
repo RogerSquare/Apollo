@@ -137,12 +137,45 @@ namespace proc {
     std::string get_running_app_uuid();
     boost::process::v1::environment get_env();
     /**
-     * @param resuming_policy Host policy of the client that is resuming the session (fork).
-     *        Re-applies the display topology that pause() reverted.
+     * @brief A client and its effective host policy (fork).
      */
-    void resume(const std::optional<host_policy::settings_t> &resuming_policy = std::nullopt);
+    struct host_client_t {
+      std::string uuid;
+      std::string name;
+      host_policy::settings_t policy;
+    };
+
+    /**
+     * @param resuming_client The client resuming the session (fork). Becomes the session's host
+     *        policy owner, and the display topology pause() reverted is re-applied with its policy.
+     */
+    void resume(const std::optional<host_client_t> &resuming_client = std::nullopt);
     void pause();
     void terminate(bool immediate = false, bool needs_refresh = true);
+
+    /**
+     * @brief Host policy state of the running app, for status APIs (fork).
+     */
+    struct host_status_t {
+      std::string client_uuid;  ///< Client that launched (or last resumed) the app.
+      std::string client_name;
+      std::string app_name;
+      bool virtual_display;
+      bool paused;  ///< No client connected; topology changes are reverted until resume.
+      host_policy::settings_t policy;  ///< What the session wants (live toggles included).
+      host_policy::display_e applied_display;  ///< What is applied to the topology right now.
+    };
+
+    /**
+     * @return Status of the running app, or nullopt when nothing runs.
+     */
+    std::optional<host_status_t> host_status();
+
+    /**
+     * @brief Change the running session's host policy immediately (fork).
+     * @return False when nothing runs.
+     */
+    bool set_live_host_policy(const host_policy::settings_t &policy);
 
   private:
     /**
@@ -151,8 +184,13 @@ namespace proc {
     void apply_host_display(host_policy::display_e display);
 
     // Fork: host policy display topology state for the running app.
+    // Guarded by host_mutex in process.cpp: the config HTTP thread changes it live while the
+    // stream thread pauses/resumes/terminates.
+    host_policy::settings_t _live_policy;  ///< What the session wants.
     host_policy::display_e _host_display = host_policy::display_e::stock;  ///< Currently applied (stock = none).
     bool _host_display_paused = false;  ///< Reverted by pause(), to be re-applied by resume().
+    std::string _host_client_uuid;
+    std::string _host_client_name;
 
     int _app_id = 0;
     std::string _app_name;

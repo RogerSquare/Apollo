@@ -52,6 +52,10 @@ namespace proc {
   using namespace std::literals;
   namespace pt = boost::property_tree;
 
+  // Fork: guards proc_t's host policy state (see process.h). Recursive because terminate()
+  // can run from inside execute(). File-scope so proc_t stays movable.
+  static std::recursive_mutex host_mutex;
+
   proc_t proc;
 
   int input_only_app_id = -1;
@@ -334,6 +338,10 @@ namespace proc {
       }
     }
 
+    std::lock_guard host_lg {host_mutex};
+    _live_policy = launch_session->host_policy;
+    _host_client_uuid = launch_session->unique_id;
+    _host_client_name = launch_session->device_name;
     _host_display = host_policy::display_e::stock;
     _host_display_paused = false;
     if (this->virtual_display && launch_session->host_policy.display != host_policy::display_e::stock) {
@@ -624,18 +632,64 @@ namespace proc {
     _host_display_paused = false;
   }
 
-  void proc_t::resume(const std::optional<host_policy::settings_t> &resuming_policy) {
+  std::optional<proc_t::host_status_t> proc_t::host_status() {
+    std::lock_guard lg {host_mutex};
+    if (!running()) {
+      return std::nullopt;
+    }
+    return host_status_t {
+      _host_client_uuid,
+      _host_client_name,
+      _app_name,
+      this->virtual_display,
+      _host_display_paused,
+      _live_policy,
+      _host_display_paused ? host_policy::display_e::stock : _host_display,
+    };
+  }
+
+  bool proc_t::set_live_host_policy(const host_policy::settings_t &policy) {
+    std::lock_guard lg {host_mutex};
+    if (!running()) {
+      return false;
+    }
+
+    _live_policy = policy;
+    // While paused the topology is already restored; resume() applies the new policy.
+    if (!this->virtual_display || _host_display_paused || policy.display == _host_display) {
+      return true;
+    }
+
+    BOOST_LOG(info) << "Host policy: live change of display to "sv << host_policy::to_string(policy.display);
+    if (policy.display == host_policy::display_e::stock) {
+      display_device::revert_configuration_now();
+      _host_display = host_policy::display_e::stock;
+    } else {
+      apply_host_display(policy.display);
+    }
+    return true;
+  }
+
+  void proc_t::resume(const std::optional<host_client_t> &resuming_client) {
     BOOST_LOG(info) << "Session resuming for app [" << _app_name << "].";
 
-    // Fork: re-apply the topology pause() reverted, using the resuming client's policy.
-    if (_host_display_paused && this->virtual_display) {
-      const auto display = resuming_policy ? resuming_policy->display : _host_display;
-      if (display != host_policy::display_e::stock) {
-        apply_host_display(display);
-      } else {
-        // The resuming client wants stock behavior; the topology is already restored.
-        _host_display = host_policy::display_e::stock;
-        _host_display_paused = false;
+    {
+      std::lock_guard lg {host_mutex};
+      if (resuming_client) {
+        _host_client_uuid = resuming_client->uuid;
+        _host_client_name = resuming_client->name;
+        _live_policy = resuming_client->policy;
+      }
+
+      // Fork: re-apply the topology pause() reverted, using the session's (now resuming client's) policy.
+      if (_host_display_paused) {
+        if (this->virtual_display && _live_policy.display != host_policy::display_e::stock) {
+          apply_host_display(_live_policy.display);
+        } else {
+          // Stock behavior (or no virtual display): the topology is already restored.
+          _host_display = host_policy::display_e::stock;
+          _host_display_paused = false;
+        }
       }
     }
 
@@ -695,9 +749,13 @@ namespace proc {
     BOOST_LOG(info) << "Session pausing for app [" << _app_name << "].";
 
     // Fork: nobody is watching the virtual display, so give the desk its monitor back.
-    if (_host_display != host_policy::display_e::stock && !_host_display_paused) {
-      BOOST_LOG(info) << "Host policy: restoring display topology while paused"sv;
-      display_device::revert_configuration_now();
+    {
+      std::lock_guard lg {host_mutex};
+      if (_host_display != host_policy::display_e::stock && !_host_display_paused) {
+        BOOST_LOG(info) << "Host policy: restoring display topology while paused"sv;
+        display_device::revert_configuration_now();
+      }
+      // Also marks a stock session paused, so a live change made while paused waits for resume().
       _host_display_paused = true;
     }
 
@@ -802,6 +860,7 @@ namespace proc {
 
     // Fork: restore the host's topology while the virtual display still exists, so every device
     // in the saved state is present. Reverting after removal (the stock order) can't fully apply it.
+    std::unique_lock host_lg {host_mutex};
     bool host_display_reverted = false;
     if (_host_display != host_policy::display_e::stock) {
       if (!_host_display_paused) {
@@ -809,9 +868,10 @@ namespace proc {
         display_device::revert_configuration_now();
       }
       _host_display = host_policy::display_e::stock;
-      _host_display_paused = false;
       host_display_reverted = true;
     }
+    _host_display_paused = false;
+    host_lg.unlock();
 
     if (used_virtual_display) {
       if (VDISPLAY::removeVirtualDisplay(_launch_session->display_guid)) {

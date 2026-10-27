@@ -424,6 +424,7 @@ namespace stream {
     safe::signal_t controlEnd;
 
     std::atomic<session::state_e> state;
+    std::chrono::system_clock::time_point started_at;  ///< Fork: for status APIs.
   };
 
   /**
@@ -1957,6 +1958,23 @@ namespace stream {
       return session.device_uuid;
     }
 
+    info_t snapshot(const session_t &session) {
+      const auto &monitor = session.config.monitor;
+      return {
+        session.device_uuid,
+        session.device_name,
+        net::addr_to_normalized_string(session.video.peer.address()),
+        monitor.width,
+        monitor.height,
+        monitor.framerate,
+        monitor.bitrate,
+        monitor.videoFormat,
+        monitor.dynamicRange > 0,
+        session.state.load(std::memory_order_relaxed),
+        session.started_at,
+      };
+    }
+
     bool uuid_match(const session_t &session, const std::string_view& uuid) {
       return session.device_uuid == uuid;
     }
@@ -2116,12 +2134,17 @@ namespace stream {
       session.audioThread = std::thread {audioThread, &session};
       session.videoThread = std::thread {videoThread, &session};
 
+      session.started_at = std::chrono::system_clock::now();
       session.state.store(state_e::RUNNING, std::memory_order_relaxed);
 
       // If this is the first session, invoke the platform callbacks
       if (++running_sessions == 1) {
         platf::streaming_will_start();
-        proc::proc.resume(nvhttp::effective_host_policy(session.device_uuid));
+        proc::proc.resume(proc::proc_t::host_client_t {
+          session.device_uuid,
+          session.device_name,
+          nvhttp::effective_host_policy(session.device_uuid),
+        });
       }
 
       if (!session.do_cmds.empty()) {

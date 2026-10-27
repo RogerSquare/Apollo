@@ -627,6 +627,18 @@ namespace rtsp_stream {
       return uuids;
     }
 
+    std::list<stream::session::info_t>
+    get_all_session_infos() {
+      std::list<stream::session::info_t> infos;
+      auto lg = _session_slots.lock();
+      for (auto &slot : *_session_slots) {
+        if (slot) {
+          infos.push_back(stream::session::snapshot(*slot));
+        }
+      }
+      return infos;
+    }
+
   private:
     std::unordered_map<std::string_view, cmd_func_t> _map_cmd_cb;
 
@@ -658,6 +670,10 @@ namespace rtsp_stream {
 
   std::shared_ptr<stream::session_t> find_session(const std::string_view& uuid) {
     return server.find_session(uuid);
+  }
+
+  std::list<stream::session::info_t> get_all_session_infos() {
+    return server.get_all_session_infos();
   }
 
   std::list<std::string> get_all_session_uuids() {
