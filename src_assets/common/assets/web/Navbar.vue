@@ -10,11 +10,18 @@
       </span>
     </a>
 
-    <a v-for="item in items" :key="item.href" class="fl-item" :class="{ active: item.active }"
-       :href="item.href" :aria-current="item.active ? 'page' : null">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true" v-html="item.icon"></svg>
-      <span>{{ item.label }}</span>
-    </a>
+    <template v-for="item in items" :key="item.href">
+      <a class="fl-item" :class="{ active: item.active }"
+         :href="item.href" :aria-current="item.active ? 'page' : null">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true" v-html="item.icon"></svg>
+        <span>{{ item.label }}</span>
+      </a>
+      <!-- Settings' sections, shown while in Settings (incl. Account) -->
+      <div v-if="item.sub && inSettings" class="fl-sub">
+        <a v-for="s in item.sub" :key="s.href" :href="s.href" :class="{ active: s.active }"
+           :aria-current="s.active ? 'page' : null">{{ s.label }}</a>
+      </div>
+    </template>
 
     <div class="fl-spacer"></div>
     <div class="fl-theme">
@@ -39,7 +46,7 @@ const ICONS = {
 export default {
   components: { ThemeToggle },
   data() {
-    return { hostName: '' }
+    return { hostName: '', hash: document.location.hash.substring(1) }
   },
   computed: {
     page() {
@@ -47,19 +54,36 @@ export default {
       const p = document.location.pathname.replace(/\/+$/, '').split('/').pop()
       return p === '' || p === 'index.html' ? 'home' : p.replace(/\.html$/, '')
     },
+    inSettings() {
+      return this.page === 'config' || this.page === 'password'
+    },
+    settingsSection() {
+      if (this.page === 'password') return 'account'
+      const h = this.hash
+      if (['nv', 'qsv', 'amd', 'vt', 'vaapi', 'sw'].includes(h)) return 'encoder'
+      if (h === 'files') return 'advanced'
+      return ['general', 'input', 'av', 'network', 'encoder', 'advanced'].includes(h) ? h : 'general'
+    },
     items() {
       const t = (k) => this.$t(k)
+      const sub = ['general', 'input', 'av', 'network', 'encoder', 'advanced'].map((id) => ({
+        href: './config#' + id, label: t('fork.section_' + id), active: this.page === 'config' && this.settingsSection === id,
+      }))
+      sub.push({ href: './password', label: t('fork.nav_account'), active: this.page === 'password' })
       return [
         { href: './', label: t('navbar.home'), icon: ICONS.home, active: this.page === 'home' },
         { href: './pin', label: t('fork.nav_devices'), icon: ICONS.devices, active: this.page === 'pin' },
         { href: './apps', label: t('fork.nav_apps'), icon: ICONS.apps, active: this.page === 'apps' },
-        { href: './config', label: t('fork.nav_settings'), icon: ICONS.settings, active: this.page === 'config' },
-        { href: './password', label: t('fork.nav_account'), icon: ICONS.account, active: this.page === 'password' },
+        { href: './config', label: t('fork.nav_settings'), icon: ICONS.settings, active: this.inSettings, sub },
         { href: './troubleshooting', label: t('navbar.troubleshoot'), icon: ICONS.troubleshoot, active: this.page === 'troubleshooting' },
       ]
     },
   },
   async mounted() {
+    // Settings switches sections by hash (also via replaceState, which fires no hashchange).
+    const syncHash = () => { this.hash = document.location.hash.substring(1) }
+    window.addEventListener('hashchange', syncHash)
+    window.addEventListener('fl-section', syncHash)
     try {
       const r = await (await fetch('./api/session', { credentials: 'include' })).json()
       this.hostName = r.host_name || ''

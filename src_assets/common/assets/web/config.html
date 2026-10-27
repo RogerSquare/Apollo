@@ -4,38 +4,51 @@
 <head>
   <%- header %>
     <style>
-      .config-page {
-        padding: 1em;
-        border: 1px solid #dee2e6;
-        border-top: none;
-      }
-
       .pre-wrap {
         white-space: pre-wrap;
       }
 
-      .buttons {
-        padding: 1em 0;
-      }
+      .set-head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+      .set-head h1 { margin: 2px 0 0; }
+      .set-search { flex: 0 1 320px; }
+      .set-section-title { margin: 24px 0 8px; font-size: 14px; font-weight: 600; }
+      .set-section-title:first-child { margin-top: 0; }
+      .seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--fl-radius); border: 1px solid var(--fl-stroke); background: var(--fl-card-2); }
+      .seg button { height: 28px; padding: 0 14px; border: none; border-radius: 3px; background: transparent; color: var(--fl-text-2); font: inherit; font-size: 13px; cursor: pointer; }
+      .seg button[aria-pressed=true] { background: var(--fl-accent-fill); color: var(--fl-on-accent); font-weight: 600; }
     </style>
 </head>
 
 <body id="app" v-cloak>
   <Navbar></Navbar>
   <div class="container">
-    <h1 class="my-4">{{ $t('config.configuration') }}</h1>
-    <div class="form" v-if="config">
-      <!-- Header -->
-      <ul class="nav nav-tabs">
-        <li class="nav-item" v-for="tab in tabs" :key="tab.id">
-          <a class="nav-link" :class="{'active': tab.id === currentTab}" href="#"
-            @click="currentTab = tab.id">{{tab.name}}</a>
-        </li>
-      </ul>
+    <div class="set-head">
+      <div style="flex: 1 1 280px;">
+        <div class="fl-muted">{{ $t('fork.nav_settings') }}</div>
+        <h1>{{ searching ? $t('fork.search_results') : sectionTitle(section) }}</h1>
+      </div>
+      <div class="set-search">
+        <label class="fl-sr" for="set-search">{{ $t('fork.find_setting') }}</label>
+        <input id="set-search" type="search" class="form-control" :placeholder="$t('fork.find_setting')" v-model="query">
+      </div>
+    </div>
+
+    <div class="form fl-settings" v-if="config">
+      <!-- Encoder: one section, a small switch picks the vendor page -->
+      <div class="fl-row mb-3" v-if="section === 'encoder' && !searching && encoderTabs.length > 1" style="border-radius: var(--fl-radius-card);">
+        <div class="fl-row-text">
+          <div class="fl-row-title">{{ $t('fork.encoder_vendor') }}</div>
+          <div class="fl-row-desc">{{ $t('fork.encoder_vendor_desc') }}</div>
+        </div>
+        <div class="seg" role="group" :aria-label="$t('fork.encoder_vendor')">
+          <button type="button" v-for="t in encoderTabs" :key="t.id" :aria-pressed="currentTab === t.id ? 'true' : 'false'" @click="goSection(t.id)">{{ encoderLabel(t.id) }}</button>
+        </div>
+      </div>
 
       <!-- General Tab -->
+      <h2 class="set-section-title" v-if="searching">{{ sectionTitle('general') }}</h2>
       <general
-        v-if="currentTab === 'general'"
+        v-if="currentTab === 'general' || searching"
         :config="config"
         :global-prep-cmd="global_prep_cmd"
         :global-state-cmd="global_state_cmd"
@@ -44,15 +57,17 @@
       </general>
 
       <!-- Input Tab -->
+      <h2 class="set-section-title" v-if="searching">{{ sectionTitle('input') }}</h2>
       <inputs
-        v-if="currentTab === 'input'"
+        v-if="currentTab === 'input' || searching"
         :config="config"
         :platform="platform">
       </inputs>
 
       <!-- Audio/Video Tab -->
+      <h2 class="set-section-title" v-if="searching">{{ sectionTitle('av') }}</h2>
       <audio-video
-        v-if="currentTab === 'av'"
+        v-if="currentTab === 'av' || searching"
         :config="config"
         :platform="platform"
         :vdisplay="vdisplayStatus"
@@ -60,43 +75,47 @@
       </audio-video>
 
       <!-- Network Tab -->
+      <h2 class="set-section-title" v-if="searching">{{ sectionTitle('network') }}</h2>
       <network
-        v-if="currentTab === 'network'"
+        v-if="currentTab === 'network' || searching"
         :config="config"
         :platform="platform">
       </network>
 
-      <!-- Files Tab -->
+      <!-- Encoder (the vendor page the switch above picked) -->
+      <h2 class="set-section-title" v-if="searching">{{ sectionTitle('encoder') }}</h2>
+      <container-encoders
+        :current-tab="searching ? preferredEncoderTab : currentTab"
+        :config="config"
+        :platform="platform">
+      </container-encoders>
+
+      <!-- Advanced: the old Advanced and Config Files tabs together -->
+      <h2 class="set-section-title" v-if="searching">{{ sectionTitle('advanced') }}</h2>
+      <advanced
+        v-if="section === 'advanced' || searching"
+        :config="config"
+        :platform="platform">
+      </advanced>
+      <h2 class="set-section-title" v-if="section === 'advanced' && !searching">{{ $t('fork.config_files') }}</h2>
       <files
-        v-if="currentTab === 'files'"
+        v-if="section === 'advanced' || searching"
         :config="config"
         :platform="platform">
       </files>
 
-      <!-- Advanced Tab -->
-      <advanced
-        v-if="currentTab === 'advanced'"
-        :config="config"
-        :platform="platform">
-      </advanced>
-
-      <container-encoders
-        :current-tab="currentTab"
-        :config="config"
-        :platform="platform">
-      </container-encoders>
+      <div class="fl-row" v-if="searching && noMatches" style="border-radius: var(--fl-radius-card);">
+        <div class="fl-row-desc">{{ $t('fork.no_matches', { q: query.trim() }) }}</div>
+      </div>
     </div>
 
-    <!-- Save and Apply buttons -->
-    <div class="alert alert-success my-4" v-if="saved && !restarted">
-      <b>{{ $t('_common.success') }}</b> {{ $t('config.apply_note') }}
-    </div>
-    <div class="alert alert-success my-4" v-if="restarted">
-      <b>{{ $t('_common.success') }}</b> {{ $t('config.restart_note') }}
-    </div>
-    <div class="mb-3 buttons">
-      <button class="btn btn-primary" @click="save">{{ $t('_common.save') }}</button>
-      <button class="btn btn-success mx-2" @click="apply" v-if="saved && !restarted">{{ $t('_common.apply') }}</button>
+    <!-- Save bar: settings are written, then Apollo restarts to apply them -->
+    <div class="fl-savebar">
+      <span class="fl-muted" style="flex: 1 1 260px; font-size: 13px;" role="status">
+        {{ restarted ? $t('config.restart_note') : saved ? $t('config.apply_note') : $t('fork.save_hint') }}
+      </span>
+      <button class="btn btn-secondary" @click="save">{{ $t('_common.save') }}</button>
+      <button class="btn btn-primary" @click="apply">{{ $t('fork.save_restart') }}</button>
     </div>
   </div>
 </body>
@@ -116,6 +135,9 @@
   import {$tp, usePlatformI18n} from './platform-i18n'
 
   let fallbackDisplayModeCache = "";
+
+  // Fork: upstream's per-vendor tabs, shown as one "Encoder" section.
+  const ENCODER_TABS = ['nv', 'qsv', 'amd', 'vt', 'vaapi', 'sw'];
 
   const app = createApp({
     components: {
@@ -140,6 +162,8 @@
         global_prep_cmd: [],
         global_state_cmd: [],
         server_cmd: [],
+        query: "",
+        noMatches: false,
         tabs: [ // TODO: Move the options to each Component instead, encapsulate.
           {
             id: "general",
@@ -408,7 +432,57 @@
 
         });
     },
+    computed: {
+      // Fork: the ten upstream tabs are shown as six sections.
+      searching() {
+        return this.query.trim().length > 0
+      },
+      encoderTabs() {
+        return this.tabs.filter((t) => ENCODER_TABS.includes(t.id))
+      },
+      section() {
+        if (ENCODER_TABS.includes(this.currentTab)) return 'encoder'
+        if (this.currentTab === 'files') return 'advanced'
+        return this.currentTab
+      },
+      // The vendor page to open first: the configured encoder, else the first one this platform has.
+      preferredEncoderTab() {
+        const byEncoder = { nvenc: 'nv', quicksync: 'qsv', amdvce: 'amd', software: 'sw', videotoolbox: 'vt', vaapi: 'vaapi' }
+        const want = this.config && byEncoder[this.config.encoder]
+        const ids = this.encoderTabs.map((t) => t.id)
+        return ids.includes(want) ? want : ids[0]
+      },
+    },
+    watch: {
+      query() {
+        this.$nextTick(() => this.filterFields())
+      },
+    },
     methods: {
+      sectionTitle(id) {
+        return this.$t('fork.section_' + id)
+      },
+      encoderLabel(id) {
+        return { nv: 'NVIDIA', qsv: 'Intel', amd: 'AMD', vt: 'VideoToolbox', vaapi: 'VA-API', sw: this.$t('fork.software') }[id] || id
+      },
+      goSection(id) {
+        this.query = ''
+        this.currentTab = id === 'encoder' ? this.preferredEncoderTab : id
+        history.replaceState(null, '', '#' + (ENCODER_TABS.includes(id) ? 'encoder' : id))
+        window.dispatchEvent(new Event('fl-section'))
+        window.scrollTo(0, 0)
+      },
+      // Search: every section renders, and fields whose text doesn't match are hidden.
+      filterFields() {
+        const q = this.query.trim().toLowerCase()
+        let shown = 0
+        document.querySelectorAll('.fl-settings .config-page > *').forEach((el) => {
+          const match = !q || el.textContent.toLowerCase().includes(q)
+          el.style.display = match ? '' : 'none'
+          if (match) shown++
+        })
+        this.noMatches = !!q && shown === 0
+      },
       forceUpdate() {
         this.$forceUpdate()
       },
@@ -533,6 +607,17 @@
 
       // Call handleHash for the initial load
       handleHash();
+
+      // Fork: section links from the nav (#general ... #encoder, #advanced)
+      const handleSection = () => {
+        const id = window.location.hash.substring(1)
+        if (id === 'encoder') this.currentTab = this.preferredEncoderTab
+        else if (['general', 'input', 'av', 'network', 'advanced', 'files'].includes(id)) this.currentTab = id === 'files' ? 'advanced' : id
+        else return
+        this.query = ''
+      }
+      handleSection();
+      window.addEventListener("hashchange", handleSection);
 
       // Add hashchange event listener
       window.addEventListener("hashchange", handleHash);

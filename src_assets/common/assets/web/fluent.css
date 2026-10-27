@@ -122,15 +122,16 @@ h4, .h4, h5, .h5 { font-size: 14px; font-weight: 600; }
   overflow-y: auto;
 }
 
-/* The nav's space is padding inside a full-width container (a margin plus a fixed width would
-   overflow narrow windows), and the content column stops at 1080px. */
+/* Full-width container: the nav's space is padding (a margin plus a fixed width would overflow
+   narrow windows), and the 1080px content column is centred in the space right of the nav. */
 body > .container,
 body > #content,
 body > .container-fluid {
+  --fl-gutter: max(40px, (100% - var(--fl-nav-width) - 1080px) / 2);
   width: auto;
-  max-width: calc(var(--fl-nav-width) + 1080px + 80px);
+  max-width: none;
   margin: 0;
-  padding: 28px 40px 48px calc(var(--fl-nav-width) + 40px);
+  padding: 28px var(--fl-gutter) 48px calc(var(--fl-nav-width) + var(--fl-gutter));
 }
 
 @media (max-width: 900px) {
@@ -501,14 +502,16 @@ body > .container-fluid {
 
 .modal-footer { background: var(--fl-card-2); border-top-color: var(--fl-stroke); }
 
-/* sticky "save and restart" bar used by the settings pages */
+/* sticky "save and restart" bar used by the settings pages: floats at the bottom of the column */
 .fl-savebar {
   position: sticky;
-  bottom: 0;
-  margin: 24px -40px -48px;
-  padding: 14px 40px;
+  bottom: 12px;
+  margin-top: 24px;
+  padding: 12px 20px;
   background: var(--fl-card);
-  border-top: 1px solid var(--fl-stroke);
+  border: 1px solid var(--fl-stroke);
+  border-radius: var(--fl-radius-card);
+  box-shadow: var(--fl-shadow);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -516,8 +519,120 @@ body > .container-fluid {
   z-index: 10;
 }
 
-@media (max-width: 900px) {
-  .fl-savebar { margin: 24px -16px -40px; padding: 12px 16px; }
+/* ---- Settings: upstream's field blocks rendered as Windows 11 setting cards ----------------- */
+
+.fl-settings .config-page {
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* each field (label + control + description, or a Checkbox) is one card */
+.fl-settings :is(.config-page, .accordion-body) > * {
+  margin: 0 !important;
+  padding: 14px 20px;
+  background: var(--fl-card);
+  border: 1px solid var(--fl-stroke);
+  border-radius: 2px;
+}
+
+.fl-settings :is(.config-page, .accordion-body) > :first-child { border-radius: var(--fl-radius-card) var(--fl-radius-card) 2px 2px; }
+.fl-settings :is(.config-page, .accordion-body) > :last-child { border-radius: 2px 2px var(--fl-radius-card) var(--fl-radius-card); }
+.fl-settings :is(.config-page, .accordion-body) > :only-child { border-radius: var(--fl-radius-card); }
+
+/* text on the left, the control on the right; anything else (alerts, tables, lists) spans the card */
+.fl-settings :is(.config-page, .accordion-body) > .mb-3,
+.fl-settings :is(.config-page, .accordion-body) > .form-check,
+.fl-settings :is(.config-page, .accordion-body) > :has(> .form-select, > input.form-control) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 300px);
+  column-gap: 24px;
+  row-gap: 2px;
+  align-items: center;
+}
+
+.fl-settings :is(.config-page, .accordion-body) > * > * { grid-column: 1 / -1; }
+.fl-settings :is(.config-page, .accordion-body) > * > label,
+.fl-settings :is(.config-page, .accordion-body) > * > .form-label,
+.fl-settings :is(.config-page, .accordion-body) > * > .form-check-label { grid-column: 1; margin: 0; font-size: 14px; }
+.fl-settings :is(.config-page, .accordion-body) > * > .form-text { grid-column: 1; margin: 0; }
+.fl-settings :is(.config-page, .accordion-body) > * > select,
+.fl-settings :is(.config-page, .accordion-body) > * > input.form-control,
+.fl-settings :is(.config-page, .accordion-body) > * > .input-group,
+.fl-settings :is(.config-page, .accordion-body) > * > .form-check-input {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.fl-settings :is(.config-page, .accordion-body) > .form-check { padding-left: 20px; }
+.fl-settings :is(.config-page, .accordion-body) > .form-check > .form-check-label .form-text { display: inline; margin-left: 6px; color: var(--fl-text-3); }
+.fl-settings :is(.config-page, .accordion-body) > * > .alert,
+.fl-settings :is(.config-page, .accordion-body) > * > .table { margin-top: 10px; }
+
+/* checkboxes in settings are on/off settings: draw them as Windows 11 toggles */
+.fl-settings :is(.config-page, .accordion-body) > .form-check > .form-check-input {
+  float: none;
+  justify-self: end;
+  margin: 0;
+  width: 40px;
+  height: 20px;
+  border-radius: 10px;
+  border-color: var(--fl-text-2);
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='2.4' fill='%23a6a6a6'/%3e%3c/svg%3e");
+  background-position: left center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  transition: background-position .15s ease-in-out;
+}
+
+.fl-settings :is(.config-page, .accordion-body) > .form-check > .form-check-input:checked {
+  border-color: var(--fl-accent-fill);
+  background-color: var(--fl-accent-fill);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='2.4' fill='%231b1b1b'/%3e%3c/svg%3e");
+  background-position: right center;
+}
+
+/* upstream's collapsible groups (encoder tuning etc.) as Win11 expanders */
+.accordion {
+  --bs-accordion-bg: var(--fl-card);
+  --bs-accordion-border-color: var(--fl-stroke);
+  --bs-accordion-border-radius: var(--fl-radius-card);
+  --bs-accordion-inner-border-radius: var(--fl-radius-card);
+  --bs-accordion-btn-bg: var(--fl-card);
+  --bs-accordion-btn-color: var(--fl-text);
+  --bs-accordion-active-bg: var(--fl-card-2);
+  --bs-accordion-active-color: var(--fl-text);
+  --bs-accordion-btn-focus-box-shadow: 0 0 0 2px var(--bs-focus-ring-color);
+}
+
+/* inside Settings an accordion is one card: no inner box, its fields are cards in a column */
+.fl-settings .config-page > .accordion,
+.fl-settings .config-page > :has(> .accordion) { padding: 0; overflow: hidden; }
+.fl-settings .accordion { --bs-accordion-border-width: 0; --bs-accordion-btn-padding-x: 20px; --bs-accordion-btn-padding-y: 16px; }
+.fl-settings .accordion-button { font-size: 14px; }
+.fl-settings .accordion-button:not(.collapsed) { box-shadow: none; }
+.fl-settings .accordion-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px 12px;
+  background: var(--fl-card-2);
+}
+.fl-settings .accordion-body > * { background: var(--fl-card); }
+
+/* "Default: checked" after every toggle is noise; the toggle shows the state */
+.fl-settings .form-check-label > .form-text { display: none !important; }
+
+@media (max-width: 700px) {
+  .fl-settings .config-page > .mb-3,
+  .fl-settings .config-page > .form-check { grid-template-columns: minmax(0, 1fr); }
+  .fl-settings .config-page > * > select,
+  .fl-settings .config-page > * > input.form-control,
+  .fl-settings .config-page > * > .input-group { grid-column: 1; grid-row: auto; margin-top: 8px; }
+  .fl-settings .config-page > .form-check { grid-template-columns: minmax(0, 1fr) auto; }
 }
 
 /* Windows 11 quick-settings tile (Home) */
