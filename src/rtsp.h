@@ -20,6 +20,9 @@
 // Resolve circular dependencies
 namespace stream {
   struct session_t;
+  namespace session {
+    struct info_t;
+  }
 }
 
 namespace rtsp_stream {
@@ -83,6 +86,12 @@ namespace rtsp_stream {
 
   std::list<std::string>
   get_all_session_uuids();
+
+  /**
+   * @brief Snapshot of every active streaming session (fork).
+   */
+  std::list<stream::session::info_t>
+  get_all_session_infos();
 
   /**
    * @brief Terminates all running streaming sessions.

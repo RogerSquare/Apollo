@@ -36,11 +36,15 @@
 #include "nvhttp.h"
 #include "platform/common.h"
 #include "process.h"
+#include "rtsp.h"
+#include "stream.h"
 #include "utility.h"
 #include "uuid.h"
 
 #ifdef _WIN32
   #include "platform/windows/utils.h"
+
+  #include <sddl.h>
 #endif
 
 using namespace std::literals;
@@ -175,9 +179,73 @@ namespace confighttp {
    *
    * This function uses session cookies (if set) and ensures they have not expired.
    */
+  /**
+   * @brief Fork: per-start token for local companion apps (tray app, Handoff).
+   *
+   * Written to %ProgramData%\ApolloFork\api.token, readable only by SYSTEM, Administrators and
+   * interactive users. Accepted in the `X-Apollo-Token` header from loopback only, as an
+   * alternative to the web UI session cookie.
+   */
+  static std::string local_api_token;
+
+  static void write_local_api_token() {
+    local_api_token = crypto::rand_alphabet(48, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"sv);
+#ifdef _WIN32
+    const wchar_t *program_data = _wgetenv(L"ProgramData");
+    std::filesystem::path dir = std::filesystem::path {program_data ? program_data : L"C:\\ProgramData"} / L"ApolloFork";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    auto file = dir / L"api.token";
+
+    // An existing file keeps its old DACL under CREATE_ALWAYS, so start fresh.
+    DeleteFileW(file.c_str());
+
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    // Protected DACL: SYSTEM + Administrators full, interactive users read.
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;IU)", SDDL_REVISION_1, &sd, nullptr)) {
+      BOOST_LOG(error) << "Local API token: couldn't build security descriptor ("sv << GetLastError() << ')';
+      return;
+    }
+    SECURITY_ATTRIBUTES sa {sizeof(sa), sd, FALSE};
+    HANDLE h = CreateFileW(file.c_str(), GENERIC_WRITE, 0, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    LocalFree(sd);
+    if (h == INVALID_HANDLE_VALUE) {
+      BOOST_LOG(error) << "Local API token: couldn't create "sv << file.string() << " ("sv << GetLastError() << ')';
+      return;
+    }
+    DWORD written = 0;
+    WriteFile(h, local_api_token.data(), static_cast<DWORD>(local_api_token.size()), &written, nullptr);
+    CloseHandle(h);
+    BOOST_LOG(info) << "Local API token written to "sv << file.string();
+#endif
+  }
+
+  static bool token_authenticated(req_https_t request) {
+    if (local_api_token.empty()) {
+      return false;
+    }
+    auto it = request->header.find("X-Apollo-Token");
+    if (it == request->header.end() || it->second.size() != local_api_token.size()) {
+      return false;
+    }
+    // Constant-time compare.
+    unsigned char diff = 0;
+    for (std::size_t i = 0; i < local_api_token.size(); ++i) {
+      diff |= static_cast<unsigned char>(it->second[i] ^ local_api_token[i]);
+    }
+    if (diff != 0) {
+      return false;
+    }
+    auto address = net::addr_to_normalized_string(request->remote_endpoint().address());
+    return net::from_address(address) == net::PC;
+  }
+
   bool authenticate(resp_https_t response, req_https_t request, bool needsRedirect = false) {
     if (!checkIPOrigin(response, request))
       return false;
+    if (token_authenticated(request)) {
+      return true;
+    }
     // If credentials not set, redirect to welcome.
     if (config::sunshine.username.empty()) {
       send_redirect(response, request, "/welcome");
@@ -1117,6 +1185,130 @@ namespace confighttp {
     }
   }
 
+  static nlohmann::json session_json() {
+    nlohmann::json sessions = nlohmann::json::array();
+    for (const auto &info : rtsp_stream::get_all_session_infos()) {
+      static constexpr std::array codecs {"H.264", "HEVC", "AV1"};
+      sessions.push_back({
+        {"uuid", info.device_uuid},
+        {"name", info.device_name},
+        {"address", info.address},
+        {"width", info.width},
+        {"height", info.height},
+        {"fps", info.framerate},
+        {"bitrate_kbps", info.bitrate_kbps},
+        {"codec", info.video_format >= 0 && info.video_format < (int) codecs.size() ? codecs[info.video_format] : "unknown"},
+        {"hdr", info.hdr},
+        {"running", info.state == stream::session::state_e::RUNNING},
+        {"started_at_ms", std::chrono::duration_cast<std::chrono::milliseconds>(info.started_at.time_since_epoch()).count()},
+      });
+    }
+
+    nlohmann::json app = nullptr;
+    if (auto status = proc::proc.host_status()) {
+      app = {
+        {"name", status->app_name},
+        {"client_uuid", status->client_uuid},
+        {"client_name", status->client_name},
+        {"virtual_display", status->virtual_display},
+        {"paused", status->paused},
+        {"policy", host_settings_to_json(status->policy)},
+        {"applied_display", std::string {host_policy::to_string(status->applied_display)}},
+      };
+    }
+
+    return {
+      {"status", true},
+      {"streaming", !sessions.empty()},
+      {"sessions", std::move(sessions)},
+      {"app", std::move(app)},
+      {"global", host_settings_to_json(config::host)},
+    };
+  }
+
+  /**
+   * @brief Live session status (fork).
+   *
+   * `sessions` lists connected clients; `app` is the running app and its host policy state
+   * (null when nothing runs). `app.policy` is what the session wants, `app.applied_display`
+   * what the display topology has right now (stock while paused).
+   *
+   * @api_examples{/api/session| GET| null}
+   */
+  void getSession(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+
+    send_response(response, session_json());
+  }
+
+  /**
+   * @brief Change the running session's host policy now, and remember it for that device (fork).
+   *        Omitted fields keep their current value. Fails with status false when nothing runs.
+   *
+   * @code{.json}
+   * { "display": "stock|primary|exclusive", "mute_wavelink": true }
+   * @endcode
+   *
+   * @api_examples{/api/session/host-policy| POST| {"display":"exclusive"}}
+   */
+  void updateSessionHostPolicy(resp_https_t response, req_https_t request) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    std::stringstream ss;
+    ss << request->content.rdbuf();
+    try {
+      nlohmann::json input_tree = nlohmann::json::parse(ss.str());
+      auto status = proc::proc.host_status();
+      if (!status) {
+        nlohmann::json output_tree;
+        output_tree["status"] = false;
+        output_tree["error"] = "Nothing is streaming";
+        send_response(response, output_tree);
+        return;
+      }
+
+      auto policy = status->policy;
+      std::optional<host_policy::display_e> display;
+      std::optional<bool> mute;
+      if (input_tree.contains("display")) {
+        display = host_policy::display_from_string(input_tree["display"].get<std::string>());
+        if (!display) {
+          bad_request(response, request, "display must be one of: stock, primary, exclusive");
+          return;
+        }
+        policy.display = *display;
+      }
+      if (input_tree.contains("mute_wavelink")) {
+        mute = input_tree["mute_wavelink"].get<bool>();
+        policy.mute_wavelink = *mute;
+      }
+
+      proc::proc.set_live_host_policy(policy);
+
+      // Remember it for the device. Web UI launches (host uuid) have no device to save to.
+      if (auto stored = nvhttp::device_host_policy(status->client_uuid)) {
+        if (display) {
+          stored->display = display;
+        }
+        if (mute) {
+          stored->mute_wavelink = mute;
+        }
+        nvhttp::update_device_host_policy(status->client_uuid, *stored);
+      }
+
+      send_response(response, session_json());
+    } catch (std::exception &e) {
+      BOOST_LOG(warning) << "UpdateSessionHostPolicy: "sv << e.what();
+      bad_request(response, request, e.what());
+    }
+  }
+
   /**
    * @brief Unpair a client.
    * @param response The HTTP response object.
@@ -1689,6 +1881,7 @@ namespace confighttp {
    * @brief Start the HTTPS server.
    */
   void start() {
+    write_local_api_token();
     auto shutdown_event = mail::man->event<bool>(mail::shutdown);
     auto port_https = net::map_port(PORT_HTTPS);
     auto address_family = net::af_from_enum_string(config::sunshine.address_family);
@@ -1737,6 +1930,8 @@ namespace confighttp {
     server.resource["^/api/clients/host-policy$"]["POST"] = updateClientHostPolicy;
     server.resource["^/api/host-policy$"]["GET"] = getHostPolicy;
     server.resource["^/api/host-policy$"]["POST"] = saveHostPolicy;
+    server.resource["^/api/session$"]["GET"] = getSession;
+    server.resource["^/api/session/host-policy$"]["POST"] = updateSessionHostPolicy;
     server.resource["^/api/clients/unpair$"]["POST"] = unpair;
     server.resource["^/api/clients/disconnect$"]["POST"] = disconnect;
     server.resource["^/api/covers/upload$"]["POST"] = uploadCover;

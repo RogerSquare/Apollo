@@ -70,6 +70,30 @@ POST /api/clients/host-policy    {uuid, display?, mute_wavelink?}  replaces the 
                                   omitted fields = "inherit"; mute_wavelink is "inherit"|"on"|"off"
 ```
 
+Live session (for the tray app and Handoff):
+
+```text
+GET  /api/session                -> { streaming, sessions: [{uuid, name, address, width, height, fps,
+                                      bitrate_kbps, codec, hdr, running, started_at_ms}],
+                                      app: null | {name, client_uuid, client_name, virtual_display, paused,
+                                                   policy: {display, mute_wavelink}, applied_display},
+                                      global: {...} }
+POST /api/session/host-policy    {display?, mute_wavelink?}  applies to the running session now AND saves it
+                                  as that device's override (web-UI launches: live only). status false when idle.
+```
+
+`app.policy` is what the session wants; `app.applied_display` is the topology right now (stock while paused).
+Live changes switch topology in place (stock <-> primary <-> exclusive); a change made while paused is
+applied on resume. `mute_wavelink` is state only in Apollo; Handoff acts on it.
+
+### Local API token
+
+Companion apps authenticate without the web UI password: on every start Apollo writes a random token to
+`%ProgramData%\ApolloFork\api.token` (protected DACL: SYSTEM + Administrators full, INTERACTIVE read) and
+accepts it in the `X-Apollo-Token` header **from loopback only**. Re-read the file on 401 (it rotates on
+restart). Browsers can't read the file, and a page can't send the custom header cross-origin without a
+CORS preflight Apollo never grants.
+
 `/api/clients/list` also returns `host_display` and `host_mute_wavelink` per client. The existing
 `/api/clients/update` endpoint is unchanged and never touches the override.
 

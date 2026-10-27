@@ -294,4 +294,9 @@ namespace nvhttp {
    *        Unknown uuids get the global default.
    */
   host_policy::settings_t effective_host_policy(const std::string &uuid);
+
+  /**
+   * @brief A paired client's stored override (fork). Nullopt for unknown uuids.
+   */
+  std::optional<host_policy::override_t> device_host_policy(const std::string &uuid);
 }  // namespace nvhttp

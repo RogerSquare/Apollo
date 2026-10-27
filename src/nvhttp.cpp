@@ -1866,6 +1866,15 @@ namespace nvhttp {
     return false;
   }
 
+  std::optional<host_policy::override_t> device_host_policy(const std::string &uuid) {
+    for (auto &named_cert_p : client_root.named_devices) {
+      if (named_cert_p->uuid == uuid) {
+        return named_cert_p->host_policy;
+      }
+    }
+    return std::nullopt;
+  }
+
   host_policy::settings_t effective_host_policy(const std::string &uuid) {
     for (auto &named_cert_p : client_root.named_devices) {
       if (named_cert_p->uuid == uuid) {

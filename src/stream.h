@@ -46,8 +46,26 @@ namespace stream {
       RUNNING,  ///< The session is running
     };
 
+    /**
+     * @brief Read-only snapshot of a session for status APIs (fork).
+     */
+    struct info_t {
+      std::string device_uuid;
+      std::string device_name;
+      std::string address;
+      int width;
+      int height;
+      int framerate;
+      int bitrate_kbps;
+      int video_format;  ///< 0 - H.264, 1 - HEVC, 2 - AV1
+      bool hdr;  ///< Client requested 10-bit (HDR-capable) encoding
+      state_e state;
+      std::chrono::system_clock::time_point started_at;
+    };
+
     std::shared_ptr<session_t> alloc(config_t &config, rtsp_stream::launch_session_t &launch_session);
     std::string uuid(const session_t& session);
+    info_t snapshot(const session_t &session);
     bool uuid_match(const session_t& session, const std::string_view& uuid);
     bool update_device_info(session_t& session, const std::string& name, const crypto::PERM& newPerm);
     int start(session_t &session, const std::string &addr_string);
