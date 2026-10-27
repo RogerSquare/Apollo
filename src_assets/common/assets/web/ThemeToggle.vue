@@ -9,7 +9,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="dropdown bd-mode-toggle">
+  <div class="dropup bd-mode-toggle">
     <a class="nav-link dropdown-toggle align-items-center"
             id="bd-theme"
             type="button"

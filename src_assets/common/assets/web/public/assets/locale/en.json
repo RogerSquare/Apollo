@@ -307,7 +307,7 @@
     "install_steam_audio_drivers": "Install Steam Audio Drivers",
     "install_steam_audio_drivers_desc": "If Steam is installed, this will automatically install the Steam Streaming Speakers driver to support 5.1/7.1 surround sound and muting host audio.",
     "isolated_virtual_display_option": "Move the Virtual Display to the bottom right-most corner of the display layout",
-    "isolated_virtual_display_option_desc": "This makes the display isolated from all other display and contains mouse movements to the virtual screen. This reorganizes the displays such that the all other displays are to the left of the virtual display.",	
+    "isolated_virtual_display_option_desc": "This makes the display isolated from all other display and contains mouse movements to the virtual screen. This reorganizes the displays such that the all other displays are to the left of the virtual display.",
     "keep_sink_default": "Keep virtual sink as default",
     "keep_sink_default_desc": "Whether to force selected virtual sink as default (effective when host audio output is disabled).",
     "key_repeat_delay": "Key Repeat Delay",
@@ -462,8 +462,13 @@
     "wan_encryption_mode_2": "Required for all clients",
     "wan_encryption_mode_desc": "This determines when encryption will be used when streaming over the Internet. Encryption can reduce streaming performance, particularly on less powerful hosts and clients."
   },
-  "login": {
-    "save_password": "Remember Password"
+  "fork": {
+    "nav_label": "Main",
+    "nav_devices": "Devices",
+    "nav_apps": "Apps",
+    "nav_settings": "Settings",
+    "nav_account": "Account",
+    "this_pc": "This PC"
   },
   "index": {
     "description": "Apollo is a self-hosted game stream host for Moonlight.",
@@ -476,6 +481,9 @@
     "version_dirty": "Thank you for helping to make Apollo a better software!",
     "version_latest": "You are running the latest version of Apollo",
     "welcome": "Hello, Apollo!"
+  },
+  "login": {
+    "save_password": "Remember Password"
   },
   "navbar": {
     "applications": "Applications",

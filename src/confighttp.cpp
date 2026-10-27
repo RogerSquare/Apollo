@@ -1230,6 +1230,7 @@ namespace confighttp {
 
     return {
       {"status", true},
+      {"host_name", config::nvhttp.sunshine_name},
       {"streaming", !sessions.empty()},
       {"sessions", std::move(sessions)},
       {"app", std::move(app)},

@@ -1,38 +1,24 @@
 <template>
-  <nav class="navbar navbar-light navbar-expand-lg navbar-background header">
-    <div class="container">
-      <a class="navbar-brand" href="./" title="Apollo">
-        <img src="/images/logo-apollo-45.png" height="45" alt="Apollo">
-      </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
-              aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarSupportedContent">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="./"><i class="fas fa-fw fa-home"></i> {{ $t('navbar.home') }}</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="./pin"><i class="fas fa-fw fa-unlock"></i> {{ $t('navbar.pin') }}</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="./apps"><i class="fas fa-fw fa-stream"></i> {{ $t('navbar.applications') }}</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="./config"><i class="fas fa-fw fa-cog"></i> {{ $t('navbar.configuration') }}</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="./password"><i class="fas fa-fw fa-user-shield"></i> {{ $t('navbar.password') }}</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="./troubleshooting"><i class="fas fa-fw fa-info"></i> {{ $t('navbar.troubleshoot') }}</a>
-          </li>
-          <li class="nav-item">
-            <ThemeToggle/>
-          </li>
-        </ul>
-      </div>
+  <nav class="fl-nav" :aria-label="$t('fork.nav_label')">
+    <a class="fl-brand" href="./" title="Apollo">
+      <span class="fl-brand-mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="3.2"/><path d="M10 1.8v2.6M10 15.6v2.6M1.8 10h2.6M15.6 10h2.6M4.2 4.2l1.8 1.8M14 14l1.8 1.8M4.2 15.8 6 14M14 6l1.8-1.8"/></svg>
+      </span>
+      <span class="fl-brand-text">
+        <span class="fl-brand-title d-block">Apollo</span>
+        <span class="fl-brand-sub d-block">{{ hostName || $t('fork.this_pc') }}</span>
+      </span>
+    </a>
+
+    <a v-for="item in items" :key="item.href" class="fl-item" :class="{ active: item.active }"
+       :href="item.href" :aria-current="item.active ? 'page' : null">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true" v-html="item.icon"></svg>
+      <span>{{ item.label }}</span>
+    </a>
+
+    <div class="fl-spacer"></div>
+    <div class="fl-theme">
+      <ThemeToggle/>
     </div>
   </nav>
 </template>
@@ -40,47 +26,65 @@
 <script>
 import ThemeToggle from './ThemeToggle.vue'
 
+// Inline Fluent-style stroke icons (16px grid).
+const ICONS = {
+  home: '<path d="M2.5 7.2 8 2.5l5.5 4.7V13a.5.5 0 0 1-.5.5H9.5V10h-3v3.5H3a.5.5 0 0 1-.5-.5z"/>',
+  devices: '<rect x="1.5" y="3" width="9" height="7" rx="1"/><path d="M4 12.5h4"/><rect x="11" y="5" width="3.5" height="8" rx="0.8"/>',
+  apps: '<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>',
+  settings: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
+  account: '<circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14a5.5 5.5 0 0 1 11 0"/>',
+  troubleshoot: '<path d="M9.5 2.2a3.3 3.3 0 0 0 4.3 4.3L7 13.3a1.5 1.5 0 0 1-2.2-2.1z"/>',
+}
+
 export default {
   components: { ThemeToggle },
-  created() {
-    console.log("Header mounted!")
+  data() {
+    return { hostName: '' }
   },
-  mounted() {
-    let el = document.querySelector("a[href='" + document.location.pathname + "']");
-    if (el) el.classList.add("active")
-  }
+  computed: {
+    page() {
+      // Pages are served without an extension: /, /pin, /apps, /config, /password, /troubleshooting
+      const p = document.location.pathname.replace(/\/+$/, '').split('/').pop()
+      return p === '' || p === 'index.html' ? 'home' : p.replace(/\.html$/, '')
+    },
+    items() {
+      const t = (k) => this.$t(k)
+      return [
+        { href: './', label: t('navbar.home'), icon: ICONS.home, active: this.page === 'home' },
+        { href: './pin', label: t('fork.nav_devices'), icon: ICONS.devices, active: this.page === 'pin' },
+        { href: './apps', label: t('fork.nav_apps'), icon: ICONS.apps, active: this.page === 'apps' },
+        { href: './config', label: t('fork.nav_settings'), icon: ICONS.settings, active: this.page === 'config' },
+        { href: './password', label: t('fork.nav_account'), icon: ICONS.account, active: this.page === 'password' },
+        { href: './troubleshooting', label: t('navbar.troubleshoot'), icon: ICONS.troubleshoot, active: this.page === 'troubleshooting' },
+      ]
+    },
+  },
+  async mounted() {
+    try {
+      const r = await (await fetch('./api/session', { credentials: 'include' })).json()
+      this.hostName = r.host_name || ''
+    } catch (e) {
+      // Not logged in yet (login/welcome pages): keep the generic label.
+    }
+  },
 }
 </script>
 
 <style>
-.navbar-background {
-  background-color: #ffc400
+.fl-theme .bd-mode-toggle .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--fl-radius);
+  color: var(--fl-text);
+  font-size: 14px;
 }
 
-.header .nav-link {
-  color: rgba(0, 0, 0, .65) !important;
-}
+.fl-theme .bd-mode-toggle .nav-link:hover { background: var(--fl-sel); }
 
-.header .nav-link.active {
-  color: rgb(0, 0, 0) !important;
-  font-weight: 500;
-}
-
-.header .nav-link:hover {
-  color: rgb(0, 0, 0) !important;
-  font-weight: 500;
-}
-
-.header .navbar-toggler {
-  color: rgba(var(--bs-dark-rgb), .65) !important;
-  border: var(--bs-border-width) solid rgba(var(--bs-dark-rgb), 0.15) !important;
-}
-
-.header .navbar-toggler-icon {
-  --bs-navbar-toggler-icon-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%2833, 37, 41, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
-}
-
-.form-control::placeholder {
-  opacity: 0.5;
+@media (max-width: 900px) {
+  .fl-theme #bd-theme-text { display: none; }
 }
 </style>

@@ -1,0 +1,559 @@
+/*
+ * Fork: Windows 11 (Fluent) look for the web UI.
+ * Loaded after Bootstrap: defines the design tokens, remaps Bootstrap's variables and restyles the
+ * controls the existing pages use, and lays out the left NavigationView from Navbar.vue.
+ */
+
+/* ---- tokens -------------------------------------------------------------------------------- */
+
+:root,
+[data-bs-theme=light] {
+  --fl-accent: #c08c00;          /* amber, darkened so text/fills on light keep 4.5:1 */
+  --fl-accent-fill: #ffc83d;
+  --fl-on-accent: #1b1b1b;
+  --fl-bg: #f3f3f3;              /* Mica (light) */
+  --fl-card: #fbfbfb;
+  --fl-card-2: #ffffff;
+  --fl-ctl: #ffffff;
+  --fl-ctl-hover: #f6f6f6;
+  --fl-stroke: rgba(0, 0, 0, 0.08);
+  --fl-stroke-strong: #8a8a8a;
+  --fl-text: #1b1b1b;
+  --fl-text-2: #4d4d4d;
+  --fl-text-3: #626262;
+  --fl-sel: rgba(0, 0, 0, 0.05);
+  --fl-danger: #c42b1c;
+  --fl-success: #0f7b0f;
+  --fl-warning-bg: #fff4ce;
+  --fl-danger-bg: #fde7e9;
+  --fl-info-bg: #f2f2f2;
+  --fl-shadow: 0 8px 16px rgba(0, 0, 0, 0.14);
+}
+
+[data-bs-theme=dark] {
+  --fl-accent: #ffc83d;
+  --fl-accent-fill: #ffc83d;
+  --fl-on-accent: #1b1b1b;
+  --fl-bg: #202020;              /* Mica (dark) */
+  --fl-card: #2b2b2b;
+  --fl-card-2: #323232;
+  --fl-ctl: #3a3a3a;
+  --fl-ctl-hover: #424242;
+  --fl-stroke: rgba(255, 255, 255, 0.07);
+  --fl-stroke-strong: #9a9a9a;
+  --fl-text: #ffffff;
+  --fl-text-2: #c8c8c8;
+  --fl-text-3: #a6a6a6;
+  --fl-sel: rgba(255, 255, 255, 0.06);
+  --fl-danger: #ff99a4;
+  --fl-success: #6ccb5f;
+  --fl-warning-bg: #433519;
+  --fl-danger-bg: #442726;
+  --fl-info-bg: #2b2b2b;
+  --fl-shadow: 0 8px 16px rgba(0, 0, 0, 0.36);
+}
+
+:root,
+[data-bs-theme] {
+  --fl-font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --fl-font-display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --fl-radius: 4px;
+  --fl-radius-card: 8px;
+  --fl-nav-width: 288px;
+
+  /* Bootstrap's own variables, so untouched components follow the theme */
+  --bs-body-bg: var(--fl-bg);
+  --bs-body-color: var(--fl-text);
+  --bs-body-font-family: var(--fl-font);
+  --bs-body-font-size: 14px;
+  --bs-emphasis-color: var(--fl-text);
+  --bs-secondary-color: var(--fl-text-2);
+  --bs-tertiary-color: var(--fl-text-3);
+  --bs-secondary-bg: var(--fl-card-2);
+  --bs-tertiary-bg: var(--fl-card);
+  --bs-border-color: var(--fl-stroke);
+  --bs-border-radius: var(--fl-radius);
+  --bs-border-radius-lg: var(--fl-radius-card);
+  --bs-link-color: var(--fl-accent);
+  --bs-link-hover-color: var(--fl-accent);
+  --bs-link-color-rgb: 192, 140, 0;
+  --bs-link-hover-color-rgb: 192, 140, 0;
+  --bs-heading-color: var(--fl-text);
+  --bs-focus-ring-color: color-mix(in srgb, var(--fl-accent) 45%, transparent);
+}
+
+[data-bs-theme=dark] {
+  --bs-link-color-rgb: 255, 200, 61;
+  --bs-link-hover-color-rgb: 255, 200, 61;
+}
+
+body {
+  background: var(--fl-bg);
+  color: var(--fl-text);
+  font-family: var(--fl-font);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, .h1 {
+  font-family: var(--fl-font-display);
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 20px;
+}
+
+h2, .h2 { font-size: 20px; font-weight: 600; }
+h3, .h3 { font-size: 16px; font-weight: 600; }
+h4, .h4, h5, .h5 { font-size: 14px; font-weight: 600; }
+
+/* ---- layout: NavigationView + content ----------------------------------------------------- */
+
+.fl-nav {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--fl-nav-width);
+  box-sizing: border-box;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--fl-bg);
+  z-index: 1030;
+  overflow-y: auto;
+}
+
+body > .container,
+body > #content,
+body > .container-fluid {
+  max-width: 1080px;
+  margin: 0 0 0 var(--fl-nav-width);
+  padding: 28px 40px 48px;
+}
+
+@media (max-width: 900px) {
+  .fl-nav {
+    position: sticky;
+    inset: 0 0 auto 0;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--fl-stroke);
+  }
+  .fl-nav .fl-brand-text,
+  .fl-nav .fl-sub,
+  .fl-nav .fl-spacer { display: none; }
+  .fl-nav .fl-item { flex: none; }
+  body > .container,
+  body > #content,
+  body > .container-fluid {
+    margin: 0;
+    padding: 20px 16px 40px;
+  }
+}
+
+.fl-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fl-brand-mark {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--fl-accent-fill);
+  color: var(--fl-on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fl-brand-title { font-size: 14px; font-weight: 600; }
+.fl-brand-sub { font-size: 12px; color: var(--fl-text-3); }
+
+.fl-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--fl-radius);
+  color: var(--fl-text);
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.fl-item:hover { background: var(--fl-sel); color: var(--fl-text); }
+
+.fl-item.active { background: var(--fl-sel); }
+
+.fl-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--fl-accent-fill);
+}
+
+.fl-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 6px 40px;
+}
+
+.fl-sub a {
+  display: block;
+  padding: 6px 12px;
+  border-radius: var(--fl-radius);
+  font-size: 13px;
+  color: var(--fl-text-2);
+  text-decoration: none;
+}
+
+.fl-sub a:hover { background: var(--fl-sel); color: var(--fl-text); }
+.fl-sub a.active { background: var(--fl-sel); color: var(--fl-text); font-weight: 600; }
+
+.fl-spacer { flex: 1 1 auto; }
+
+/* ---- cards, setting rows, expanders --------------------------------------------------------- */
+
+.card,
+.fl-card {
+  --bs-card-bg: var(--fl-card);
+  --bs-card-border-color: var(--fl-stroke);
+  --bs-card-border-radius: var(--fl-radius-card);
+  --bs-card-cap-bg: transparent;
+  background: var(--fl-card);
+  border: 1px solid var(--fl-stroke);
+  border-radius: var(--fl-radius-card);
+  color: var(--fl-text);
+}
+
+.fl-card { padding: 20px 24px; }
+
+.fl-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 24px; }
+.fl-group > h2,
+.fl-group-title { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+
+/* a Windows 11 "settings card": title + description on the left, the control on the right */
+.fl-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 12px 20px;
+  background: var(--fl-card);
+  border: 1px solid var(--fl-stroke);
+  border-radius: 2px;
+  flex-wrap: wrap;
+}
+
+.fl-group > .fl-row:first-of-type { border-radius: var(--fl-radius-card) var(--fl-radius-card) 2px 2px; }
+.fl-group > .fl-row:last-of-type { border-radius: 2px 2px var(--fl-radius-card) var(--fl-radius-card); }
+.fl-group > .fl-row:only-of-type { border-radius: var(--fl-radius-card); }
+
+.fl-row-text { flex: 1 1 260px; min-width: 0; }
+.fl-row-title { font-size: 14px; }
+.fl-row-desc { font-size: 12px; color: var(--fl-text-2); }
+
+.fl-muted { color: var(--fl-text-2); }
+.fl-caption { font-size: 12px; color: var(--fl-text-3); }
+
+/* ---- buttons -------------------------------------------------------------------------------- */
+
+.btn {
+  --bs-btn-font-size: 14px;
+  --bs-btn-padding-x: 16px;
+  --bs-btn-padding-y: 5px;
+  --bs-btn-border-radius: var(--fl-radius);
+  font-family: var(--fl-font);
+}
+
+.btn-primary,
+.btn-success,
+.fl-btn-accent {
+  --bs-btn-color: var(--fl-on-accent);
+  --bs-btn-bg: var(--fl-accent-fill);
+  --bs-btn-border-color: var(--fl-accent-fill);
+  --bs-btn-hover-color: var(--fl-on-accent);
+  --bs-btn-hover-bg: color-mix(in srgb, var(--fl-accent-fill) 90%, var(--fl-bg));
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--fl-accent-fill) 90%, var(--fl-bg));
+  --bs-btn-active-color: var(--fl-on-accent);
+  --bs-btn-active-bg: color-mix(in srgb, var(--fl-accent-fill) 80%, var(--fl-bg));
+  --bs-btn-active-border-color: color-mix(in srgb, var(--fl-accent-fill) 80%, var(--fl-bg));
+  --bs-btn-disabled-color: var(--fl-text-3);
+  --bs-btn-disabled-bg: var(--fl-sel);
+  --bs-btn-disabled-border-color: transparent;
+  font-weight: 600;
+}
+
+.btn-secondary,
+.btn-light,
+.btn-dark,
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-success,
+.btn-outline-dark,
+.btn-outline-light,
+.btn-info,
+.fl-btn {
+  --bs-btn-color: var(--fl-text);
+  --bs-btn-bg: var(--fl-ctl);
+  --bs-btn-border-color: var(--fl-stroke);
+  --bs-btn-hover-color: var(--fl-text);
+  --bs-btn-hover-bg: var(--fl-ctl-hover);
+  --bs-btn-hover-border-color: var(--fl-stroke);
+  --bs-btn-active-color: var(--fl-text-2);
+  --bs-btn-active-bg: var(--fl-card);
+  --bs-btn-active-border-color: var(--fl-stroke);
+  --bs-btn-disabled-color: var(--fl-text-3);
+  --bs-btn-disabled-bg: var(--fl-ctl);
+  --bs-btn-disabled-border-color: var(--fl-stroke);
+}
+
+.btn-danger,
+.btn-outline-danger,
+.btn-warning,
+.btn-outline-warning {
+  --bs-btn-color: var(--fl-danger);
+  --bs-btn-bg: transparent;
+  --bs-btn-border-color: var(--fl-stroke);
+  --bs-btn-hover-color: var(--fl-danger);
+  --bs-btn-hover-bg: var(--fl-danger-bg);
+  --bs-btn-hover-border-color: var(--fl-stroke);
+  --bs-btn-active-color: var(--fl-danger);
+  --bs-btn-active-bg: var(--fl-danger-bg);
+  --bs-btn-active-border-color: var(--fl-stroke);
+}
+
+/* ---- inputs --------------------------------------------------------------------------------- */
+
+.form-control,
+.form-select,
+.fl-input {
+  min-height: 32px;
+  padding: 5px 10px;
+  border-radius: var(--fl-radius);
+  border: 1px solid var(--fl-stroke);
+  border-bottom-color: var(--fl-stroke-strong);
+  background-color: var(--fl-ctl);
+  color: var(--fl-text);
+  font-family: var(--fl-font);
+  font-size: 14px;
+}
+
+.form-control:focus,
+.form-select:focus,
+.fl-input:focus {
+  background-color: var(--fl-card-2);
+  color: var(--fl-text);
+  border-color: var(--fl-stroke);
+  border-bottom: 2px solid var(--fl-accent-fill);
+  padding-bottom: 4px;
+  box-shadow: none;
+  outline: none;
+}
+
+.form-control::placeholder { color: var(--fl-text-3); }
+.form-control:disabled,
+.form-select:disabled { background-color: var(--fl-sel); color: var(--fl-text-3); }
+
+.form-label { font-size: 14px; margin-bottom: 6px; }
+.form-text { color: var(--fl-text-2); font-size: 12px; }
+
+.input-group-text {
+  background: var(--fl-card-2);
+  border-color: var(--fl-stroke);
+  color: var(--fl-text-2);
+}
+
+/* checkbox */
+.form-check-input {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--fl-stroke-strong);
+  background-color: transparent;
+}
+
+.form-check-input:checked {
+  background-color: var(--fl-accent-fill);
+  border-color: var(--fl-accent-fill);
+}
+
+.form-check-input:focus { box-shadow: 0 0 0 2px var(--bs-focus-ring-color); border-color: var(--fl-stroke-strong); }
+
+/* toggle switch (Bootstrap .form-switch) as a Windows 11 toggle */
+.form-switch .form-check-input {
+  width: 40px;
+  height: 20px;
+  border-radius: 10px;
+  border-color: var(--fl-text-2);
+  --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='2.4' fill='%23a6a6a6'/%3e%3c/svg%3e");
+}
+
+.form-switch .form-check-input:checked {
+  --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='2.4' fill='%231b1b1b'/%3e%3c/svg%3e");
+  border-color: var(--fl-accent-fill);
+}
+
+/* ---- tabs, pills, dropdowns, lists ------------------------------------------------------------ */
+
+.nav-tabs {
+  --bs-nav-tabs-border-color: var(--fl-stroke);
+  --bs-nav-tabs-link-active-bg: transparent;
+  --bs-nav-tabs-link-active-color: var(--fl-text);
+  --bs-nav-tabs-link-active-border-color: transparent;
+  --bs-nav-tabs-link-hover-border-color: transparent;
+  gap: 4px;
+  border-bottom: 1px solid var(--fl-stroke);
+}
+
+.nav-tabs .nav-link {
+  color: var(--fl-text-2);
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  padding: 8px 12px;
+}
+
+.nav-tabs .nav-link:hover { color: var(--fl-text); background: var(--fl-sel); }
+.nav-tabs .nav-link.active { color: var(--fl-text); border-bottom-color: var(--fl-accent-fill); font-weight: 600; }
+
+.nav-pills {
+  --bs-nav-pills-link-active-bg: var(--fl-sel);
+  --bs-nav-pills-link-active-color: var(--fl-text);
+  --bs-nav-link-color: var(--fl-text-2);
+  --bs-nav-link-hover-color: var(--fl-text);
+}
+
+.dropdown-menu {
+  --bs-dropdown-bg: var(--fl-card-2);
+  --bs-dropdown-border-color: var(--fl-stroke);
+  --bs-dropdown-link-color: var(--fl-text);
+  --bs-dropdown-link-hover-bg: var(--fl-sel);
+  --bs-dropdown-link-active-bg: var(--fl-sel);
+  --bs-dropdown-link-active-color: var(--fl-text);
+  --bs-dropdown-border-radius: var(--fl-radius-card);
+  box-shadow: var(--fl-shadow);
+  padding: 4px;
+}
+
+.dropdown-item { border-radius: var(--fl-radius); }
+
+.list-group {
+  --bs-list-group-bg: var(--fl-card);
+  --bs-list-group-border-color: var(--fl-stroke);
+  --bs-list-group-color: var(--fl-text);
+  --bs-list-group-action-hover-bg: var(--fl-sel);
+  --bs-list-group-border-radius: var(--fl-radius-card);
+}
+
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--fl-text);
+  --bs-table-border-color: var(--fl-stroke);
+  --bs-table-striped-bg: var(--fl-sel);
+  --bs-table-hover-bg: var(--fl-sel);
+}
+
+.badge.bg-primary,
+.badge.text-bg-primary { background: var(--fl-accent-fill) !important; color: var(--fl-on-accent) !important; }
+
+/* ---- alerts, modals --------------------------------------------------------------------------- */
+
+.alert {
+  --bs-alert-border-radius: var(--fl-radius-card);
+  border: 1px solid var(--fl-stroke);
+  color: var(--fl-text);
+}
+
+.alert-info,
+.alert-primary,
+.alert-secondary,
+.alert-light { background: var(--fl-info-bg); }
+.alert-warning { background: var(--fl-warning-bg); }
+.alert-danger { background: var(--fl-danger-bg); }
+.alert-success { background: var(--fl-info-bg); }
+
+.modal-content {
+  --bs-modal-bg: var(--fl-card);
+  --bs-modal-border-color: var(--fl-stroke);
+  --bs-modal-border-radius: var(--fl-radius-card);
+  box-shadow: var(--fl-shadow);
+}
+
+.modal-footer { background: var(--fl-card-2); border-top-color: var(--fl-stroke); }
+
+/* sticky "save and restart" bar used by the settings pages */
+.fl-savebar {
+  position: sticky;
+  bottom: 0;
+  margin: 24px -40px -48px;
+  padding: 14px 40px;
+  background: var(--fl-card);
+  border-top: 1px solid var(--fl-stroke);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  z-index: 10;
+}
+
+@media (max-width: 900px) {
+  .fl-savebar { margin: 24px -16px -40px; padding: 12px 16px; }
+}
+
+/* Windows 11 quick-settings tile (Home) */
+.fl-tile {
+  height: 56px;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--fl-stroke);
+  background: var(--fl-card-2);
+  color: var(--fl-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fl-tile:hover { background: var(--fl-ctl-hover); }
+.fl-tile[aria-pressed=true] { border-color: var(--fl-accent-fill); background: var(--fl-accent-fill); color: var(--fl-on-accent); }
+.fl-tile[aria-pressed=true]:hover { background: color-mix(in srgb, var(--fl-accent-fill) 90%, var(--fl-bg)); }
+.fl-tile:disabled { opacity: 0.5; cursor: default; }
+
+.fl-pill {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--fl-accent-fill);
+  color: var(--fl-on-accent);
+}
+
+.visually-hidden-focusable:not(:focus):not(:focus-within),
+.fl-sr {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+}

@@ -5,6 +5,11 @@ import i18n from './locale'
 // https://discourse.aurelia.io/t/bootstrap-import-bootstrap-breaks-dropdown-menu-in-navbar/641/9
 import 'bootstrap/dist/js/bootstrap'
 
+// Fork: Bootstrap's CSS, then the Windows 11 theme over it. Imported here (not linked from the
+// page header) so Vite bundles them in this order; a header link loaded before the bundle.
+import 'bootstrap/dist/css/bootstrap.min.css'
+import './fluent.css'
+
 export function initApp(app, config) {
     //Wait for locale initialization, then render
     i18n().then(i18n => {
