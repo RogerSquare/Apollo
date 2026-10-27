@@ -612,6 +612,14 @@ namespace proc {
   void proc_t::apply_host_display(host_policy::display_e display) {
     const auto device_id = config::video.output_name;  // Points at the virtual display while one is in use.
     display_device::apply_host_display_policy(device_id, display);
+#ifdef _WIN32
+    if (display == host_policy::display_e::primary) {
+      // Making the stream primary keeps whatever gap the isolated-display option left, so lay the
+      // physical displays out explicitly: touching the stream, on its left.
+      auto status = VDISPLAY::arrangeOthersLeftOf(platf::from_utf8(this->display_name).c_str());
+      BOOST_LOG(info) << "Host policy: arranged other displays left of the stream (status "sv << status << ')';
+    }
+#endif
     _host_display = display;
     _host_display_paused = false;
   }
