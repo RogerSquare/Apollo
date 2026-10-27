@@ -282,4 +282,16 @@ namespace nvhttp {
     const bool allow_client_commands,
     const bool always_use_virtual_display
   );
+
+  /**
+   * @brief Set a paired client's host policy override and persist it (fork).
+   * @return Whether a client with that uuid exists.
+   */
+  bool update_device_host_policy(const std::string &uuid, const host_policy::override_t &policy);
+
+  /**
+   * @brief Effective host policy for a client: its override over config::host (fork).
+   *        Unknown uuids get the global default.
+   */
+  host_policy::settings_t effective_host_policy(const std::string &uuid);
 }  // namespace nvhttp

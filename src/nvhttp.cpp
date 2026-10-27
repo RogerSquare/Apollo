@@ -251,6 +251,13 @@ namespace nvhttp {
         named_cert_node["enable_legacy_ordering"] = named_cert_p->enable_legacy_ordering;
         named_cert_node["allow_client_commands"] = named_cert_p->allow_client_commands;
         named_cert_node["always_use_virtual_display"] = named_cert_p->always_use_virtual_display;
+        // Fork: only written when overridden; stock Apollo ignores these keys.
+        if (named_cert_p->host_policy.display) {
+          named_cert_node["host_display"] = host_policy::override_display_to_string(named_cert_p->host_policy.display);
+        }
+        if (named_cert_p->host_policy.mute_wavelink) {
+          named_cert_node["host_mute_wavelink"] = host_policy::override_bool_to_string(named_cert_p->host_policy.mute_wavelink);
+        }
 
         // Add "do" commands if available.
         if (!named_cert_p->do_cmds.empty()) {
@@ -348,6 +355,8 @@ namespace nvhttp {
         named_cert_p->enable_legacy_ordering = el.value("enable_legacy_ordering", true);
         named_cert_p->allow_client_commands = el.value("allow_client_commands", true);
         named_cert_p->always_use_virtual_display = el.value("always_use_virtual_display", false);
+        named_cert_p->host_policy.display = host_policy::override_display_from_string(el.value("host_display", ""));
+        named_cert_p->host_policy.mute_wavelink = host_policy::override_bool_from_string(el.value("host_mute_wavelink", ""));
         // Load command entries for "do" and "undo" keys.
         named_cert_p->do_cmds = extract_command_entries(el, "do");
         named_cert_p->undo_cmds = extract_command_entries(el, "undo");
@@ -1025,6 +1034,8 @@ namespace nvhttp {
       named_cert_node["enable_legacy_ordering"] = named_cert->enable_legacy_ordering;
       named_cert_node["allow_client_commands"] = named_cert->allow_client_commands;
       named_cert_node["always_use_virtual_display"] = named_cert->always_use_virtual_display;
+      named_cert_node["host_display"] = host_policy::override_display_to_string(named_cert->host_policy.display);
+      named_cert_node["host_mute_wavelink"] = host_policy::override_bool_to_string(named_cert->host_policy.mute_wavelink);
 
       // Add "do" commands if available
       if (!named_cert->do_cmds.empty()) {
@@ -1837,6 +1848,26 @@ namespace nvhttp {
     }
 
     return false;
+  }
+
+  bool update_device_host_policy(const std::string &uuid, const host_policy::override_t &policy) {
+    for (auto &named_cert_p : client_root.named_devices) {
+      if (named_cert_p->uuid == uuid) {
+        named_cert_p->host_policy = policy;
+        save_state();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  host_policy::settings_t effective_host_policy(const std::string &uuid) {
+    for (auto &named_cert_p : client_root.named_devices) {
+      if (named_cert_p->uuid == uuid) {
+        return host_policy::resolve(config::host, named_cert_p->host_policy);
+      }
+    }
+    return config::host;
   }
 
   bool unpair_client(const std::string_view uuid) {

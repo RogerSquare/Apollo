@@ -42,6 +42,10 @@ file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_SOURCE_DIR}/tests/*.h
         ${CMAKE_SOURCE_DIR}/tests/*.cpp)
 
+# Fork: upstream Apollo v0.4.6 changed nvhttp's pairing signatures without updating this test,
+# so it does not compile. Excluded until upstream fixes it.
+list(REMOVE_ITEM TEST_SOURCES ${CMAKE_SOURCE_DIR}/tests/unit/test_http_pairing.cpp)
+
 set(SUNSHINE_SOURCES
         ${SUNSHINE_TARGET_FILES})
 

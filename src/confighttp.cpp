@@ -933,6 +933,191 @@ namespace confighttp {
   }
 
   /**
+   * @brief Set `key = value` lines in sunshine.conf in place, appending keys that are missing.
+   *        Unlike saveConfig this keeps every other line (and its order) untouched.
+   */
+  static void set_config_file_values(const std::vector<std::pair<std::string, std::string>> &values) {
+    std::istringstream in(file_handler::read_file(config::sunshine.config_file.c_str()));
+    std::vector<std::string> lines;
+    for (std::string line; std::getline(in, line);) {
+      if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+      }
+      lines.push_back(std::move(line));
+    }
+
+    for (const auto &[key, value] : values) {
+      auto new_line = key + " = " + value;
+      auto it = std::find_if(lines.begin(), lines.end(), [&key](const std::string &line) {
+        auto start = line.find_first_not_of(" \t");
+        if (start == std::string::npos || line.compare(start, key.size(), key) != 0) {
+          return false;
+        }
+        auto rest = line.find_first_not_of(" \t", start + key.size());
+        return rest != std::string::npos && line[rest] == '=';
+      });
+      if (it != lines.end()) {
+        *it = std::move(new_line);
+      } else {
+        lines.push_back(std::move(new_line));
+      }
+    }
+
+    std::ostringstream out;
+    for (const auto &line : lines) {
+      out << line << '\n';
+    }
+    file_handler::write_file(config::sunshine.config_file.c_str(), out.str());
+  }
+
+  static nlohmann::json host_settings_to_json(const host_policy::settings_t &settings) {
+    return {
+      {"display", std::string {host_policy::to_string(settings.display)}},
+      {"mute_wavelink", settings.mute_wavelink},
+    };
+  }
+
+  /**
+   * @brief Get the global host policy and every paired client's override + effective policy (fork).
+   *
+   * @code{.json}
+   * {
+   *   "status": true,
+   *   "global": { "display": "stock|primary|exclusive", "mute_wavelink": false },
+   *   "clients": [ {
+   *     "uuid": "<uuid>", "name": "<name>",
+   *     "override": { "display": "inherit|stock|primary|exclusive", "mute_wavelink": "inherit|on|off" },
+   *     "effective": { "display": "...", "mute_wavelink": true }
+   *   } ]
+   * }
+   * @endcode
+   *
+   * @api_examples{/api/host-policy| GET| null}
+   */
+  void getHostPolicy(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    nlohmann::json clients = nlohmann::json::array();
+    for (auto &client : nvhttp::get_all_clients()) {
+      std::string uuid = client.value("uuid", "");
+      clients.push_back({
+        {"uuid", uuid},
+        {"name", client.value("name", "")},
+        {"override", {
+          {"display", client.value("host_display", "inherit")},
+          {"mute_wavelink", client.value("host_mute_wavelink", "inherit")},
+        }},
+        {"effective", host_settings_to_json(nvhttp::effective_host_policy(uuid))},
+      });
+    }
+
+    nlohmann::json output_tree;
+    output_tree["status"] = true;
+    output_tree["global"] = host_settings_to_json(config::host);
+    output_tree["clients"] = std::move(clients);
+    send_response(response, output_tree);
+  }
+
+  /**
+   * @brief Update the global default host policy (fork). Omitted fields are left unchanged.
+   *        Takes effect for the next session without a restart, and is persisted to sunshine.conf.
+   *
+   * @code{.json}
+   * { "display": "stock|primary|exclusive", "mute_wavelink": true }
+   * @endcode
+   *
+   * @api_examples{/api/host-policy| POST| {"display":"exclusive"}}
+   */
+  void saveHostPolicy(resp_https_t response, req_https_t request) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    std::stringstream ss;
+    ss << request->content.rdbuf();
+    try {
+      nlohmann::json input_tree = nlohmann::json::parse(ss.str());
+      auto updated = config::host;
+
+      if (input_tree.contains("display")) {
+        auto display = host_policy::display_from_string(input_tree["display"].get<std::string>());
+        if (!display) {
+          bad_request(response, request, "display must be one of: stock, primary, exclusive");
+          return;
+        }
+        updated.display = *display;
+      }
+      if (input_tree.contains("mute_wavelink")) {
+        updated.mute_wavelink = input_tree["mute_wavelink"].get<bool>();
+      }
+
+      set_config_file_values({
+        {"host_display_policy", std::string {host_policy::to_string(updated.display)}},
+        {"host_mute_wavelink", updated.mute_wavelink ? "enabled" : "disabled"},
+      });
+      config::host = updated;
+
+      nlohmann::json output_tree;
+      output_tree["status"] = true;
+      output_tree["global"] = host_settings_to_json(config::host);
+      send_response(response, output_tree);
+    } catch (std::exception &e) {
+      BOOST_LOG(warning) << "SaveHostPolicy: "sv << e.what();
+      bad_request(response, request, e.what());
+    }
+  }
+
+  /**
+   * @brief Replace a paired client's host policy override (fork). Omitted fields mean "inherit".
+   *
+   * @code{.json}
+   * { "uuid": "<uuid>", "display": "inherit|stock|primary|exclusive", "mute_wavelink": "inherit|on|off" }
+   * @endcode
+   *
+   * @api_examples{/api/clients/host-policy| POST| {"uuid":"1234","display":"primary","mute_wavelink":"inherit"}}
+   */
+  void updateClientHostPolicy(resp_https_t response, req_https_t request) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    std::stringstream ss;
+    ss << request->content.rdbuf();
+    try {
+      nlohmann::json input_tree = nlohmann::json::parse(ss.str());
+      std::string uuid = input_tree.value("uuid", "");
+      std::string display = input_tree.value("display", "inherit");
+      std::string mute = input_tree.value("mute_wavelink", "inherit");
+
+      host_policy::override_t policy;
+      policy.display = host_policy::override_display_from_string(display);
+      policy.mute_wavelink = host_policy::override_bool_from_string(mute);
+      if ((!policy.display && display != "inherit") || (!policy.mute_wavelink && mute != "inherit")) {
+        bad_request(response, request, "display must be inherit|stock|primary|exclusive, mute_wavelink must be inherit|on|off");
+        return;
+      }
+
+      nlohmann::json output_tree;
+      output_tree["status"] = nvhttp::update_device_host_policy(uuid, policy);
+      if (output_tree["status"]) {
+        output_tree["effective"] = host_settings_to_json(nvhttp::effective_host_policy(uuid));
+      }
+      send_response(response, output_tree);
+    } catch (std::exception &e) {
+      BOOST_LOG(warning) << "UpdateClientHostPolicy: "sv << e.what();
+      bad_request(response, request, e.what());
+    }
+  }
+
+  /**
    * @brief Unpair a client.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
@@ -1549,6 +1734,9 @@ namespace confighttp {
     server.resource["^/api/clients/unpair-all$"]["POST"] = unpairAll;
     server.resource["^/api/clients/list$"]["GET"] = getClients;
     server.resource["^/api/clients/update$"]["POST"] = updateClient;
+    server.resource["^/api/clients/host-policy$"]["POST"] = updateClientHostPolicy;
+    server.resource["^/api/host-policy$"]["GET"] = getHostPolicy;
+    server.resource["^/api/host-policy$"]["POST"] = saveHostPolicy;
     server.resource["^/api/clients/unpair$"]["POST"] = unpair;
     server.resource["^/api/clients/disconnect$"]["POST"] = disconnect;
     server.resource["^/api/covers/upload$"]["POST"] = uploadCover;

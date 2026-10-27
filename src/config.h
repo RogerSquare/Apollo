@@ -13,6 +13,7 @@
 #include <vector>
 
 // local includes
+#include "host_policy.h"
 #include "nvenc/nvenc_config.h"
 
 namespace config {
@@ -294,6 +295,7 @@ namespace config {
   extern nvhttp_t nvhttp;
   extern input_t input;
   extern sunshine_t sunshine;
+  extern host_policy::settings_t host;  ///< Global default host policy (fork).
 
   int parse(int argc, char *argv[]);
   std::unordered_map<std::string, std::string> parse_config(const std::string_view &file_content);
