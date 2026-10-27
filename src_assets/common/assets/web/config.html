@@ -112,7 +112,7 @@
     <!-- Save bar: settings are written, then Apollo restarts to apply them -->
     <div class="fl-savebar">
       <span class="fl-muted" style="flex: 1 1 260px; font-size: 13px;" role="status">
-        {{ restarted ? $t('config.restart_note') : saved ? $t('config.apply_note') : $t('fork.save_hint') }}
+        {{ restarted ? $t('config.restart_note') : saved ? $t('fork.saved_restart_hint') : $t('fork.save_hint') }}
       </span>
       <button class="btn btn-secondary" @click="save">{{ $t('_common.save') }}</button>
       <button class="btn btn-primary" @click="apply">{{ $t('fork.save_restart') }}</button>
