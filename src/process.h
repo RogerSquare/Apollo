@@ -164,6 +164,7 @@ namespace proc {
       bool paused;  ///< No client connected; topology changes are reverted until resume.
       host_policy::settings_t policy;  ///< What the session wants (live toggles included).
       host_policy::display_e applied_display;  ///< What is applied to the topology right now.
+      std::string display_name;  ///< GDI name of the streamed virtual display (like DISPLAY10), empty if none.
     };
 
     /**

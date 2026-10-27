@@ -83,4 +83,62 @@ static class Native
 
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    // ---- per-monitor placement (pixels), for showing the flyout on the streamed display ------
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect { public int Left, Top, Right, Bottom; }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct MonitorInfoEx
+    {
+        public int Size;
+        public Rect Monitor, Work;
+        public uint Flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string Device;
+    }
+
+    delegate bool MonitorEnumProc(IntPtr monitor, IntPtr hdc, IntPtr rect, IntPtr data);
+    [DllImport("user32.dll")] static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfoEx info);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+    [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+    const uint MONITORINFOF_PRIMARY = 1;
+
+    /// <summary>
+    /// Work area of the display with this GDI name (e.g. \\.\DISPLAY10), else the primary display's.
+    /// Queried live: WPF's SystemParameters.WorkArea is cached and primary-only.
+    /// </summary>
+    public static Rect WorkArea(string? device)
+    {
+        Rect? match = null, primary = null;
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (mon, _, _, _) =>
+        {
+            var mi = new MonitorInfoEx { Size = Marshal.SizeOf<MonitorInfoEx>() };
+            if (!GetMonitorInfo(mon, ref mi)) return true;
+            if ((mi.Flags & MONITORINFOF_PRIMARY) != 0) primary = mi.Work;
+            if (device != null && string.Equals(mi.Device, device, StringComparison.OrdinalIgnoreCase)) match = mi.Work;
+            return true;
+        }, IntPtr.Zero);
+        return match ?? primary ?? new Rect { Right = 1920, Bottom = 1080 };
+    }
+
+    /// <summary>
+    /// Put the window in the bottom-right corner of a work area, in pixels. Moving onto a monitor with
+    /// another DPI rescales the window (per-monitor v2), so move there first, then read the real size.
+    /// </summary>
+    public static void PlaceBottomRight(Window w, Rect work, double marginDip)
+    {
+        var hwnd = new WindowInteropHelper(w).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        const uint NOSIZE = 0x1, NOZORDER = 0x4, NOACTIVATE = 0x10;
+        SetWindowPos(hwnd, IntPtr.Zero, work.Left, work.Top, 0, 0, NOSIZE | NOZORDER | NOACTIVATE);
+        w.UpdateLayout();
+        var marginPx = (int)Math.Round(marginDip * GetDpiForWindow(hwnd) / 96.0);
+        GetWindowRect(hwnd, out var r);
+        int width = r.Right - r.Left, height = r.Bottom - r.Top;
+        SetWindowPos(hwnd, IntPtr.Zero, work.Right - width - marginPx, work.Bottom - height - marginPx, 0, 0, NOSIZE | NOZORDER | NOACTIVATE);
+    }
 }

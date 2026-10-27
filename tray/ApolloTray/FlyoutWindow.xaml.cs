@@ -28,14 +28,37 @@ public partial class FlyoutWindow : Window
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) HideFlyout(); };
         // Content height changes with status (Disconnect, wrapped hints): stay anchored to the corner.
         SizeChanged += (_, _) => { if (IsVisible) Place(); };
+        _autoHide.Tick += AutoHide_Tick;
+        // Clicking it makes it an ordinary flyout again (activated, so clicking elsewhere closes it).
+        PreviewMouseDown += (_, _) => _autoHide.Stop();
         Render();
     }
 
-    void Place()
+    /// <summary>Display to open on (GDI name); null = the primary display, where the taskbar is.</summary>
+    string? _display;
+    /// <summary>Opened by a connection rather than a click: closes itself unless you use it.</summary>
+    readonly System.Windows.Threading.DispatcherTimer _autoHide = new() { Interval = TimeSpan.FromSeconds(15) };
+
+    void Place() => Native.PlaceBottomRight(this, Native.WorkArea(_display), 12);
+
+    /// <summary>
+    /// A device just connected: open on the display it's streaming, so it can be adjusted from the device.
+    /// Opened without a click we may not get foreground (so no "clicked elsewhere"), hence the auto-hide.
+    /// </summary>
+    public void ShowOnConnect(string? display)
     {
-        var wa = SystemParameters.WorkArea;
-        Left = wa.Right - ActualWidth - 12;
-        Top = wa.Bottom - ActualHeight - 12;
+        _display = display;
+        if (IsVisible) { Place(); return; }
+        ShowFlyout();
+        _autoHide.Stop();
+        _autoHide.Start();
+    }
+
+    void AutoHide_Tick(object? sender, EventArgs e)
+    {
+        if (IsMouseOver || IsKeyboardFocusWithin) return; // being used: check again next tick
+        _autoHide.Stop();
+        HideFlyout();
     }
 
     public void SetStatus(ApolloStatus status)
@@ -195,6 +218,8 @@ public partial class FlyoutWindow : Window
         // Clicking the tray icon while open deactivates us first; don't immediately reopen.
         if (IsVisible) { HideFlyout(); return; }
         if ((DateTime.Now - _hiddenAt).TotalMilliseconds < 250) return;
+        _display = null; // a tray click opens by the taskbar
+        _autoHide.Stop();
         ShowFlyout();
     }
 
@@ -216,6 +241,7 @@ public partial class FlyoutWindow : Window
     {
         if (!IsVisible) return;
         _hiddenAt = DateTime.Now;
+        _autoHide.Stop();
         Hide();
     }
 

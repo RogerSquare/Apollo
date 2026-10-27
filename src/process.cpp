@@ -654,6 +654,7 @@ namespace proc {
         _host_display_paused,
         _live_policy,
         _host_display_paused ? host_policy::display_e::stock : _host_display,
+        this->virtual_display ? this->display_name : std::string {},
       };
     }
     std::lock_guard cache_lg {cache_mutex};

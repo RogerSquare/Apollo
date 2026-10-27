@@ -59,6 +59,11 @@ public partial class App : Application
         _poll = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) => _ = PollAsync(), Dispatcher);
         UpdateTray();
         _ = PollAsync();
+
+        // Hidden: --show-on=\\.\DISPLAYn opens the flyout as a connection would (placement testing).
+        foreach (var a in e.Args)
+            if (a.StartsWith("--show-on=", StringComparison.Ordinal))
+                Dispatcher.BeginInvoke(() => _flyout.ShowOnConnect(a["--show-on=".Length..]), DispatcherPriority.ApplicationIdle);
     }
 
     async Task PollAsync()
@@ -70,8 +75,15 @@ public partial class App : Application
             var next = await _api.GetStatusAsync();
             if (next.Reachable != _status.Reachable) Log.Info(next.Reachable ? "Apollo reachable" : "Apollo not reachable");
             if ((next.Stream?.Name) != (_status.Stream?.Name)) Log.Info(next.Stream != null ? $"Streaming to {next.Stream.Name}" : "Not streaming");
+            var connected = next.Stream != null && next.Stream.Uuid != _status.Stream?.Uuid;
             _status = next;
             _flyout.SetStatus(next);
+            if (connected && ShowOnConnect)
+            {
+                // Open where the device is looking, so the monitor/audio can be set from the device.
+                Log.Info($"Showing flyout on {next.App?.DisplayName ?? "the primary display"}");
+                _flyout.ShowOnConnect(next.App?.DisplayName);
+            }
             UpdateTray();
         }
         finally { _polling = false; }
@@ -101,6 +113,7 @@ public partial class App : Application
         };
         if (s.Live) items.Add(new("Disconnect", () => _ = EndAsync()));
         items.Add(new("Open Apollo settings", () => Process.Start(new ProcessStartInfo(ApolloApi.WebUi) { UseShellExecute = true })));
+        items.Add(new("Show when a device connects", () => ShowOnConnect = !ShowOnConnect, Checked: ShowOnConnect, Radio: false));
         if (!IsDevBuild) items.Add(new("Start with Windows", () => SetStartWithWindows(!StartsWithWindows), Checked: StartsWithWindows, Radio: false));
         items.Add(NativeMenu.Item.Separator);
         items.Add(new("Quit", Quit));
@@ -127,6 +140,24 @@ public partial class App : Application
         {
             while (ev.WaitOne()) Dispatcher.Invoke(act);
         }) { IsBackground = true, Name = name }.Start();
+    }
+
+    const string SettingsKey = @"Software\ApolloTray";
+
+    /// <summary>Open the flyout on the streamed display when a device connects (default on).</summary>
+    static bool ShowOnConnect
+    {
+        get
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(SettingsKey);
+            return k?.GetValue("ShowOnConnect") is not int v || v != 0;
+        }
+        set
+        {
+            using var k = Registry.CurrentUser.CreateSubKey(SettingsKey);
+            k.SetValue("ShowOnConnect", value ? 1 : 0, RegistryValueKind.DWord);
+            Log.Info($"Show when a device connects: {value}");
+        }
     }
 
     static string ExePath => Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "ApolloTray.exe");

@@ -1214,6 +1214,7 @@ namespace confighttp {
         {"paused", status->paused},
         {"policy", host_settings_to_json(status->policy)},
         {"applied_display", std::string {host_policy::to_string(status->applied_display)}},
+        {"display_name", status->display_name},
       };
     }
 

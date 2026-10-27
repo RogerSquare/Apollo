@@ -11,7 +11,7 @@ namespace ApolloTray;
 public sealed record StreamInfo(string Uuid, string Name, int Width, int Height, int Fps, int BitrateKbps, string Codec, bool Hdr, DateTimeOffset StartedAt);
 
 /// <summary>The running app and the host policy it is using (Apollo's /api/session "app").</summary>
-public sealed record AppInfo(string Name, string ClientName, bool VirtualDisplay, bool Paused, string Display, bool MuteDesk);
+public sealed record AppInfo(string Name, string ClientName, bool VirtualDisplay, bool Paused, string Display, bool MuteDesk, string? DisplayName);
 
 public sealed record ApolloStatus(bool Reachable, StreamInfo? Stream, AppInfo? App, string GlobalDisplay, bool GlobalMuteDesk)
 {
@@ -72,7 +72,8 @@ public sealed class ApolloApi : IDisposable
                 var p = a.GetProperty("policy");
                 app = new AppInfo(a.GetProperty("name").GetString() ?? "", a.GetProperty("client_name").GetString() ?? "",
                     a.GetProperty("virtual_display").GetBoolean(), a.GetProperty("paused").GetBoolean(),
-                    p.GetProperty("display").GetString() ?? "stock", p.GetProperty("mute_wavelink").GetBoolean());
+                    p.GetProperty("display").GetString() ?? "stock", p.GetProperty("mute_wavelink").GetBoolean(),
+                    a.TryGetProperty("display_name", out var dn) && dn.GetString() is { Length: > 0 } d ? d : null);
             }
 
             var g = root.GetProperty("global");
