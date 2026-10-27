@@ -1,8 +1,14 @@
 # Build the fork with MSYS2 UCRT64 (C:\msys64). Output: build\sunshine.exe + build\assets.
 # Keep this file ASCII-only (Windows PowerShell 5.1 without BOM).
-param([switch]$Reconfigure, [string]$Msys = 'C:\msys64')
-$ErrorActionPreference = 'Stop'
+# Version is read at configure time; pass -Reconfigure after changing it.
+# Clients (Moonlight/Artemis) read it from serverinfo, so keep it on a real Apollo version.
+param([switch]$Reconfigure, [string]$Msys = 'C:\msys64', [string]$Version = '0.4.6')
+# Not 'Stop': WinPS 5.1 turns native stderr (cmake MESSAGE) into terminating errors.
+# Failures are caught via $LASTEXITCODE instead.
+$ErrorActionPreference = 'Continue'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$env:BRANCH = 'main'
+$env:BUILD_VERSION = $Version
 $env:MSYSTEM = 'UCRT64'
 $env:CHERE_INVOKING = '1'
 Push-Location $repo
