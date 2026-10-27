@@ -3,74 +3,132 @@
 
 <head>
   <%- header %>
+  <style>
+    .home { display: flex; flex-direction: column; gap: 24px; }
+    .home-hero { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .home-disc { width: 56px; height: 56px; border-radius: 50%; background: var(--fl-sel); display: flex; align-items: center; justify-content: center; flex: none; color: var(--fl-text-2); }
+    .home-disc.live { color: var(--fl-accent); }
+    .home-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+    .home-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+    .home-kv > span:first-child { color: var(--fl-text-2); }
+    .home-device { display: flex; align-items: center; gap: 16px; min-height: 64px; box-sizing: border-box; padding: 12px 20px; background: var(--fl-card); border: 1px solid var(--fl-stroke); border-radius: var(--fl-radius-card); color: var(--fl-text); text-decoration: none; }
+    .home-device:hover { background: var(--fl-card-2); color: var(--fl-text); }
+    .home-release pre { white-space: pre-wrap; font-size: 12px; margin: 8px 0 0; }
+  </style>
 </head>
 
 <body id="app" v-cloak>
   <Navbar></Navbar>
-  <div id="content" class="container">
-    <h1 class="my-4">{{ $t('index.welcome') }}</h1>
-    <p>{{ $t('index.description') }}</p>
-    <div class="alert alert-danger" v-if="fancyLogs.find(x => x.level === 'Fatal')">
-      <div style="line-height: 32px;">
-        <i class="fas fa-circle-exclamation" style="font-size: 32px;margin-right: 0.25em;"></i>
-        <p v-html="$t('index.startup_errors')"></p>
-        <br>
-      </div>
-      <ul>
-        <li v-for="v in fancyLogs.filter(x => x.level === 'Fatal')">{{v.value}}</li>
+  <div id="content" class="container home">
+    <h1 class="m-0">{{ $t('navbar.home') }}</h1>
+
+    <div class="alert alert-danger m-0" v-if="fatalLogs.length">
+      <p class="mb-2" v-html="$t('index.startup_errors')"></p>
+      <ul class="mb-2">
+        <li v-for="v in fatalLogs">{{ v.value }}</li>
       </ul>
-      <a class="btn btn-danger" href="./troubleshooting#logs">View Logs</a>
+      <a class="btn btn-danger" href="./troubleshooting#logs">{{ $t('fork.view_logs') }}</a>
     </div>
-    <!-- Version -->
-    <div class="card p-2 my-4">
-      <div class="card-body" v-if="version">
-        <h2>Version {{version.version}}</h2>
-        <br>
-        <div v-if="loading">
-          {{ $t('index.loading_latest') }}
+
+    <!-- Current stream + quick toggles (same as the tray flyout) -->
+    <section class="fl-card d-flex flex-column gap-3" :aria-label="$t('fork.current_stream')">
+      <div class="home-hero">
+        <div class="home-disc" :class="{ live: !!stream }" aria-hidden="true">
+          <svg v-if="stream" width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 8h12a4 4 0 0 1 4 4v3.5a3 3 0 0 1-5.4 1.8L16 15h-6l-1.6 2.3A3 3 0 0 1 3 15.5V12a4 4 0 0 1 4-4z"/><path d="M8.5 11v3M7 12.5h3"/><circle cx="17" cy="12" r="0.8"/><circle cx="19" cy="14" r="0.8"/></svg>
+          <svg v-else width="24" height="24" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="14" height="9.5" rx="1"/><path d="M6.5 15.5h5M9 12.5v3"/></svg>
         </div>
-        <div class="alert alert-success" v-if="buildVersionIsDirty">
-          {{ $t('index.version_dirty') }} 🌇
-        </div>
-        <div class="alert alert-info" v-if="installedVersionNotStable">
-          {{ $t('index.installed_version_not_stable') }}
-        </div>
-        <div v-else-if="(!preReleaseBuildAvailable || !notifyPreReleases) && !stableBuildAvailable && !buildVersionIsDirty">
-          <div class="alert alert-success">
-            {{ $t('index.version_latest') }}
+        <div style="flex: 1 1 260px; min-width: 0;">
+          <div class="d-flex align-items-center gap-2">
+            <span style="font-size: 20px; font-weight: 600;">{{ heroTitle }}</span>
+            <span class="fl-pill" v-if="stream">{{ $t('fork.streaming') }}</span>
           </div>
+          <div class="fl-muted" style="font-size: 13px; margin-top: 4px;">{{ heroDetail }}</div>
         </div>
-        <div v-if="notifyPreReleases && preReleaseBuildAvailable">
-          <div class="alert alert-warning">
-            <div class="d-flex justify-content-between">
-              <div class="my-2">
-                <p>{{ $t('index.new_pre_release') }}</p>
-              </div>
-              <a class="btn btn-success m-1" :href="preReleaseVersion.release.html_url" target="_blank">{{ $t('index.download') }}</a>
-            </div>
-            <pre><b>{{preReleaseVersion.release.name}}</b></pre>
-            <pre>{{preReleaseVersion.release.body}}</pre>
-          </div>
+        <button type="button" class="btn btn-secondary" v-if="session && session.app" :disabled="busy" @click="disconnect">{{ $t('fork.disconnect') }}</button>
+      </div>
+      <div class="home-tiles">
+        <div class="d-flex flex-column gap-2">
+          <button type="button" class="fl-tile" :aria-pressed="monitorOn ? 'true' : 'false'" :disabled="busy || !displayApplies" @click="toggleMonitor">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="14" height="9.5" rx="1"/><path d="M6.5 15.5h5M9 12.5v3"/></svg>
+            <span>{{ $t('fork.desk_monitor') }}</span>
+          </button>
+          <div class="fl-muted text-center" style="font-size: 12px;">{{ monitorLabel }}</div>
         </div>
-        <div v-if="stableBuildAvailable">
-          <div class="alert alert-warning">
-            <div class="d-flex justify-content-between">
-              <div class="my-2">
-                <p>{{ $t('index.new_stable') }}</p>
-              </div>
-              <a class="btn btn-success m-1" :href="githubVersion.release.html_url" target="_blank">{{ $t('index.download') }}</a>
-            </div>
-            <h3>{{githubVersion.release.name}}</h3>
-            <pre>{{githubVersion.release.body}}</pre>
-          </div>
+        <div class="d-flex flex-column gap-2">
+          <button type="button" class="fl-tile" :aria-pressed="audioOn ? 'true' : 'false'" :disabled="busy" @click="toggleAudio">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 7h2.5L9 4v10l-3.5-3H3z"/><path v-if="audioOn" d="M12 6.5a3.5 3.5 0 0 1 0 5M14 4.5a6.4 6.4 0 0 1 0 9"/><path v-else d="m12 7 4 4M16 7l-4 4"/></svg>
+            <span>{{ $t('fork.desk_audio') }}</span>
+          </button>
+          <div class="fl-muted text-center" style="font-size: 12px;">{{ audioOn ? $t('fork.audio_on_desc') : $t('fork.audio_off_desc') }}</div>
         </div>
       </div>
+      <div class="fl-caption">{{ scopeText }}</div>
+    </section>
+
+    <div class="home-grid">
+      <!-- Pair with a PIN -->
+      <section class="fl-card d-flex flex-column gap-2" aria-labelledby="pair-h">
+        <h2 id="pair-h" class="h3 m-0">{{ $t('fork.pair_device') }}</h2>
+        <p class="fl-muted m-0" style="font-size: 13px;">{{ $t('fork.pair_desc') }}</p>
+        <form class="d-flex gap-2 flex-wrap" @submit.prevent="doPair">
+          <label class="fl-sr" for="pin">PIN</label>
+          <input id="pin" class="form-control text-center" style="width: 80px;" inputmode="numeric" maxlength="4" placeholder="PIN" v-model="pin">
+          <label class="fl-sr" for="devname">{{ $t('pin.device_name') }}</label>
+          <input id="devname" class="form-control" style="flex: 1 1 140px; min-width: 0; width: auto;" :placeholder="$t('pin.device_name')" v-model="pairName">
+          <button type="submit" class="btn btn-primary" :disabled="!canPair">{{ $t('fork.pair') }}</button>
+        </form>
+        <div class="fl-caption" role="status">{{ pairResult }}</div>
+        <a href="./pin#OTP" style="font-size: 13px;">{{ $t('fork.use_otp') }}</a>
+      </section>
+
+      <!-- This PC: version + update check (same logic as before) -->
+      <section class="fl-card d-flex flex-column gap-2" aria-labelledby="pc-h">
+        <h2 id="pc-h" class="h3 m-0">{{ $t('fork.this_pc') }}</h2>
+        <div class="home-kv"><span>{{ $t('fork.host_name') }}</span><span>{{ session?.host_name || '—' }}</span></div>
+        <div class="home-kv" v-if="version"><span>{{ $t('fork.version') }}</span><span>{{ version.version }} · RogerSquare fork</span></div>
+        <div class="home-kv"><span>{{ $t('fork.vdisplay') }}</span><span>{{ vdisplayText }}</span></div>
+        <div class="home-kv"><span>{{ $t('fork.updates') }}</span><span>{{ updateText }}</span></div>
+        <div class="alert alert-info m-0 mt-2" v-if="installedVersionNotStable">{{ $t('index.installed_version_not_stable') }}</div>
+        <div class="alert alert-success m-0 mt-2" v-if="version && buildVersionIsDirty">{{ $t('index.version_dirty') }}</div>
+        <div class="alert alert-warning m-0 mt-2 home-release" v-if="notifyPreReleases && preReleaseBuildAvailable">
+          <div class="d-flex justify-content-between align-items-center gap-2">
+            <span>{{ $t('index.new_pre_release') }}</span>
+            <a class="btn btn-primary" :href="preReleaseVersion.release.html_url" target="_blank">{{ $t('index.download') }}</a>
+          </div>
+          <pre><b>{{ preReleaseVersion.release.name }}</b></pre>
+          <pre>{{ preReleaseVersion.release.body }}</pre>
+        </div>
+        <div class="alert alert-warning m-0 mt-2 home-release" v-if="stableBuildAvailable">
+          <div class="d-flex justify-content-between align-items-center gap-2">
+            <span>{{ $t('index.new_stable') }}</span>
+            <a class="btn btn-primary" :href="githubVersion.release.html_url" target="_blank">{{ $t('index.download') }}</a>
+          </div>
+          <pre><b>{{ githubVersion.release.name }}</b></pre>
+          <pre>{{ githubVersion.release.body }}</pre>
+        </div>
+      </section>
     </div>
-    <!-- Resources -->
-    <div class="my-4">
+
+    <!-- Paired devices -->
+    <section class="d-flex flex-column gap-2" aria-labelledby="devices-h" v-if="clients.length">
+      <h2 id="devices-h" class="h3 mb-1">{{ $t('fork.nav_devices') }}</h2>
+      <a v-for="c in clients" :key="c.uuid" class="home-device" :href="'./pin#' + c.uuid">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M9 15h2"/></svg>
+        <span style="flex: 1 1 auto; min-width: 0;">
+          <span class="d-block">{{ c.name || $t('fork.unnamed_device') }}</span>
+          <span class="d-block fl-muted" style="font-size: 12px;">{{ clientDetail(c) }}</span>
+        </span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m4.5 2 4 4-4 4"/></svg>
+      </a>
+    </section>
+
+    <!-- About: the upstream client + resource links, kept as they were -->
+    <section aria-labelledby="about-h">
+      <h2 id="about-h" class="h3 mb-3">{{ $t('fork.about') }}</h2>
       <Client-Card></Client-Card>
       <Resource-Card></Resource-Card>
-    </div>
+    </section>
   </div>
 </body>
 
@@ -81,8 +139,8 @@
   import ClientCard from './ClientCard.vue'
   import ResourceCard from './ResourceCard.vue'
   import ApolloVersion from './apollo_version'
+  import { getSession, getClients, setPolicy, pair, endStream, describeStream } from './fork_api'
 
-  console.log("Hello, Apollo!")
   let app = createApp({
     components: {
       Navbar,
@@ -95,21 +153,29 @@
         githubVersion: null,
         notifyPreReleases: false,
         preReleaseVersion: null,
+        vdisplayStatus: null,
         loading: true,
         logs: null,
+        session: null,
+        clients: [],
+        busy: false,
+        pin: '',
+        pairName: '',
+        pairResult: '',
+        now: Date.now(),
       }
     },
     async created() {
+      this.refresh()
+      this.timer = setInterval(() => { this.now = Date.now(); this.refresh() }, 2000)
       try {
         let config = await fetch("./api/config").then((r) => r.json());
         this.notifyPreReleases = config.notify_pre_releases;
+        this.vdisplayStatus = config.vdisplayStatus;
         this.version = new ApolloVersion(null, config.version);
-        console.log("Version: ", this.version.version)
         this.githubVersion = new ApolloVersion(await fetch("https://api.github.com/repos/ClassicOldSong/Apollo/releases/latest").then((r) => r.json()), null);
-        console.log("GitHub Version: ", this.githubVersion.version)
         if (this.githubVersion) {
           this.preReleaseVersion = new ApolloVersion((await fetch("https://api.github.com/repos/ClassicOldSong/Apollo/releases").then((r) => r.json())).find(release => release.prerelease), null);
-          console.log("Pre-Release Version: ", this.preReleaseVersion.version)
         }
       } catch (e) {
         console.error(e);
@@ -121,7 +187,108 @@
       }
       this.loading = false;
     },
+    unmounted() {
+      clearInterval(this.timer)
+    },
+    methods: {
+      async refresh() {
+        try {
+          this.session = await getSession()
+          this.clients = (await getClients()).named_certs || []
+        } catch (e) {
+          console.error(e)
+        }
+      },
+      async change(policy) {
+        this.busy = true
+        try {
+          const r = await setPolicy(this.live, policy)
+          if (r.status === false) console.warn('Policy change refused', r)
+        } catch (e) {
+          console.error(e)
+        } finally {
+          await this.refresh()
+          this.busy = false
+        }
+      },
+      // Monitor on = the Acer stays extended beside the stream; off = it is detached.
+      toggleMonitor() { this.change({ display: this.monitorOn ? 'exclusive' : 'primary' }) },
+      toggleAudio() { this.change({ mute_wavelink: this.audioOn }) },
+      async disconnect() {
+        this.busy = true
+        try { await endStream() } catch (e) { console.error(e) }
+        await this.refresh()
+        this.busy = false
+      },
+      async doPair() {
+        if (!this.canPair) return
+        this.pairResult = this.$t('fork.pairing')
+        try {
+          const r = await pair(this.pin, this.pairName.trim())
+          this.pairResult = r.status ? this.$t('fork.paired', { name: this.pairName.trim() || this.$t('fork.unnamed_device') }) : this.$t('fork.pair_failed')
+          if (r.status) { this.pin = ''; this.pairName = ''; this.refresh() }
+        } catch (e) {
+          this.pairResult = this.$t('fork.pair_failed')
+        }
+      },
+      clientDetail(c) {
+        const parts = []
+        if (c.connected) parts.push(this.$t('fork.streaming_now'))
+        const display = c.host_display && c.host_display !== 'inherit' ? c.host_display : null
+        const mute = c.host_mute_wavelink && c.host_mute_wavelink !== 'inherit' ? c.host_mute_wavelink : null
+        if (!display && !mute) {
+          parts.push(this.$t('fork.uses_defaults'))
+        } else {
+          if (display) parts.push(display === 'exclusive' ? this.$t('fork.monitor_off') : display === 'primary' ? this.$t('fork.monitor_on') : this.$t('fork.monitor_stock'))
+          if (mute) parts.push(mute === 'on' ? this.$t('fork.desk_audio_off') : this.$t('fork.desk_audio_on'))
+        }
+        return parts.join(' · ')
+      },
+    },
     computed: {
+      stream() {
+        return this.session?.sessions?.find((s) => s.running) || null
+      },
+      live() {
+        return !!this.session?.app
+      },
+      policy() {
+        return this.session?.app?.policy || this.session?.global || { display: 'stock', mute_wavelink: false }
+      },
+      monitorOn() { return this.policy.display !== 'exclusive' },
+      audioOn() { return !this.policy.mute_wavelink },
+      displayApplies() { return !this.live || this.session.app.virtual_display },
+      heroTitle() {
+        if (this.stream) return this.stream.name
+        if (this.session?.app) return this.session.app.client_name || this.session.app.name
+        return this.$t('fork.not_streaming')
+      },
+      heroDetail() {
+        if (this.stream) return `${this.session.app?.name || ''} · ${describeStream(this.stream, this.now)}`.replace(/^ · /, '')
+        if (this.session?.app) return this.$t('fork.paused_waiting', { app: this.session.app.name })
+        return this.$t('fork.ready')
+      },
+      monitorLabel() {
+        if (!this.displayApplies) return this.$t('fork.monitor_na')
+        return this.monitorOn ? this.$t('fork.monitor_on_desc') : this.$t('fork.monitor_off_desc')
+      },
+      scopeText() {
+        if (!this.live) return this.$t('fork.scope_defaults')
+        return this.$t('fork.scope_live', { name: this.stream?.name || this.session.app.client_name })
+      },
+      canPair() {
+        // The name is optional, as on the upstream PIN page.
+        return /^\d{4}$/.test(this.pin)
+      },
+      vdisplayText() {
+        if (this.vdisplayStatus === null || this.vdisplayStatus === undefined) return '—'
+        return this.vdisplayStatus === 0 ? this.$t('fork.vdisplay_ok') : this.$t('fork.vdisplay_problem', { code: this.vdisplayStatus })
+      },
+      updateText() {
+        if (this.loading) return this.$t('index.loading_latest')
+        if (this.stableBuildAvailable) return this.$t('fork.update_available')
+        return this.$t('fork.up_to_date')
+      },
       installedVersionNotStable() {
         if (!this.githubVersion || !this.version) {
           return false;
@@ -154,7 +321,10 @@
           logLines.push({ timestamp: rawLogLines[i], level: rawLogLines[i + 1].split(":")[0], value: rawLogLines[i + 1] });
         }
         return logLines;
-      }
+      },
+      fatalLogs() {
+        return this.fancyLogs.filter((x) => x.level === 'Fatal')
+      },
     }
   });
 
