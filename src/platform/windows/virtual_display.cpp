@@ -1,5 +1,7 @@
 #include <windows.h>
+#include <algorithm>
 #include <iostream>
+#include <string_view>
 #include <vector>
 #include <setupapi.h>
 #include <initguid.h>
@@ -59,6 +61,70 @@ std::vector < struct coordinates > moveToBeConnected(std::vector < struct coordi
 LONG getDeviceSettings(const wchar_t* deviceName, DEVMODEW& devMode) {
 	devMode.dmSize = sizeof(DEVMODEW);
 	return EnumDisplaySettingsW(deviceName, ENUM_CURRENT_SETTINGS, &devMode);
+}
+
+LONG arrangeOthersLeftOf(const wchar_t* deviceName) {
+	UINT32 pathCount = 0;
+	UINT32 modeCount = 0;
+	if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount)) {
+		return ERROR_INVALID_PARAMETER;
+	}
+
+	std::vector<DISPLAYCONFIG_PATH_INFO> pathArray(pathCount);
+	std::vector<DISPLAYCONFIG_MODE_INFO> modeArray(modeCount);
+	if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, pathArray.data(), &modeCount, modeArray.data(), nullptr) != ERROR_SUCCESS) {
+		return ERROR_INVALID_PARAMETER;
+	}
+
+	DISPLAYCONFIG_SOURCE_MODE* anchor = nullptr;
+	std::vector<DISPLAYCONFIG_SOURCE_MODE*> others;
+	for (UINT32 i = 0; i < pathCount; i++) {
+		UINT32 modeIdx = pathArray[i].sourceInfo.modeInfoIdx;
+		if (modeIdx == DISPLAYCONFIG_PATH_MODE_IDX_INVALID || modeIdx >= modeCount || modeArray[modeIdx].infoType != DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE) {
+			continue;
+		}
+		auto* sourceMode = &modeArray[modeIdx].sourceMode;
+
+		DISPLAYCONFIG_SOURCE_DEVICE_NAME sourceName = {};
+		sourceName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+		sourceName.header.size = sizeof(sourceName);
+		sourceName.header.adapterId = pathArray[i].sourceInfo.adapterId;
+		sourceName.header.id = pathArray[i].sourceInfo.id;
+		if (DisplayConfigGetDeviceInfo(&sourceName.header) != ERROR_SUCCESS) {
+			continue;
+		}
+
+		if (std::wstring_view(sourceName.viewGdiDeviceName) == std::wstring_view(deviceName)) {
+			anchor = sourceMode;
+		} else if (std::find(others.begin(), others.end(), sourceMode) == others.end()) {
+			// Cloned paths share a source mode; move it once.
+			others.push_back(sourceMode);
+		}
+	}
+
+	if (!anchor) {
+		wprintf(L"[SUDOVDA] arrangeOthersLeftOf: %ls is not active.\n", deviceName);
+		return ERROR_NOT_FOUND;
+	}
+	if (others.empty()) {
+		return ERROR_SUCCESS;
+	}
+
+	// Keep the current left-to-right order: the display nearest the anchor ends up touching it.
+	std::sort(others.begin(), others.end(), [](auto* a, auto* b) { return a->position.x > b->position.x; });
+	anchor->position = {0, 0};
+	LONG x = 0;
+	for (auto* mode : others) {
+		x -= static_cast<LONG>(mode->width);
+		mode->position = {x, 0};
+	}
+
+	LONG status = SetDisplayConfig(pathCount, pathArray.data(), modeCount, modeArray.data(),
+		SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES);
+	if (status != ERROR_SUCCESS) {
+		wprintf(L"[SUDOVDA] arrangeOthersLeftOf: SetDisplayConfig failed (%ld).\n", status);
+	}
+	return status;
 }
 
 LONG changeDisplaySettings2(const wchar_t* deviceName, int width, int height, int refresh_rate, bool bApplyIsolated) {

@@ -704,11 +704,10 @@ namespace display_device {
   std::unique_ptr<platf::deinit_t> init(const std::filesystem::path &persistence_filepath, const config::video_t &video_config) {
     std::lock_guard lock {DD_DATA.mutex};
     // We can support re-init without any issues, however we should make sure to clean up first!
-    if (video_config.dd.configuration_option == config::video_t::dd_t::config_option_e::disabled) {
-      if (!persistence_filepath.empty() && std::filesystem::exists(persistence_filepath)) {
-        std::filesystem::remove(persistence_filepath);
-      }
-    } else {
+    // Fork: upstream deletes the persisted state here when dd is disabled, but host policy uses
+    // dd for its topology changes even then. Keep it so the revert below can undo a session that
+    // was cut short by a crash.
+    if (video_config.dd.configuration_option != config::video_t::dd_t::config_option_e::disabled) {
       revert_configuration_unlocked(revert_option_e::try_once);
     }
     DD_DATA.config_revert_delay = video_config.dd.config_revert_delay;
@@ -816,6 +815,33 @@ namespace display_device {
   void revert_configuration() {
     std::lock_guard lock {DD_DATA.mutex};
     revert_configuration_unlocked(revert_option_e::try_indefinitely_with_delay);
+  }
+
+  void apply_host_display_policy(const std::string &device_id, host_policy::display_e display) {
+    using enum SingleDisplayConfiguration::DevicePreparation;
+
+    if (display == host_policy::display_e::stock) {
+      return;
+    }
+    if (device_id.empty()) {
+      BOOST_LOG(warning) << "Host policy: no device id for the virtual display, leaving display topology unchanged";
+      return;
+    }
+
+    // Topology only: resolution, refresh rate and HDR stay unset so Apollo's own
+    // virtual display mode handling is left alone.
+    SingleDisplayConfiguration config;
+    config.m_device_id = device_id;
+    config.m_device_prep = display == host_policy::display_e::exclusive ? EnsureOnlyDisplay : EnsurePrimary;
+
+    BOOST_LOG(info) << "Host policy: making ["sv << device_id << "] "sv
+                    << (display == host_policy::display_e::exclusive ? "the only active display"sv : "the primary display"sv);
+    configure_display(config);
+  }
+
+  void revert_configuration_now() {
+    std::lock_guard lock {DD_DATA.mutex};
+    revert_configuration_unlocked(revert_option_e::try_indefinitely);
   }
 
   bool reset_persistence() {

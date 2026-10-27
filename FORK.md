@@ -45,6 +45,16 @@ A global default plus optional per-client overrides decide what the host does wh
 
 Defaults equal stock Apollo, so an unconfigured install behaves exactly like upstream.
 
+Display behavior (only when Apollo uses a virtual display for the session):
+- `primary`: libdisplaydevice EnsurePrimary on the virtual display, then every other active display is
+  placed touching it on its left, top-aligned (`VDISPLAY::arrangeOthersLeftOf`, not saved to the Windows DB).
+- `exclusive`: libdisplaydevice EnsureOnlyDisplay; physical monitors are detached for the session.
+- The initial topology is persisted (`config\display_device.state`) and restored synchronously on
+  terminate *before* the virtual display is removed, on pause (re-applied on resume using the resuming
+  client's policy), and on the next start if Apollo crashed mid-session.
+- Fork change: `display_device::init` no longer deletes that state file when `dd_configuration_option`
+  is disabled, since host policy uses it regardless.
+
 Storage:
 - Global: `sunshine.conf` keys `host_display_policy = stock|primary|exclusive`, `host_mute_wavelink = enabled|disabled`.
 - Per client: `host_display` / `host_mute_wavelink` on each `named_devices` entry in `sunshine_state.json`,
