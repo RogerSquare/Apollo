@@ -3,6 +3,21 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Apollo</title>
+<!-- Fork: apply light/dark before first paint on every page (login has no nav/theme menu, so it
+     stayed light). Same rules as theme.js: the saved choice, else Windows' app theme. -->
+<script>
+  (function () {
+    var dark = window.matchMedia('(prefers-color-scheme: dark)');
+    function apply() {
+      var stored = null;
+      try { stored = localStorage.getItem('theme'); } catch (e) {}
+      var theme = stored === 'light' || stored === 'dark' ? stored : (dark.matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', theme);
+    }
+    apply();
+    dark.addEventListener('change', apply);
+  })();
+</script>
 <link rel="icon" type="image/x-icon" href="./images/apollo.ico">
 <link href="@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet">
 <!-- Bootstrap CSS is imported from init.js so the fork theme (fluent.css) can load after it -->
