@@ -21,6 +21,7 @@ public partial class App : Application
     DispatcherTimer _poll = null!;
     ApolloStatus _status = ApolloStatus.Offline;
     TouchMode _touch = null!;
+    readonly GameMediaPause _gameMedia = new();
     bool _polling;
 
     const string ShowEvent = @"Local\ApolloTray.Show";
@@ -32,6 +33,12 @@ public partial class App : Application
     {
         base.OnStartup(e);
         var wantMenu = Array.IndexOf(e.Args, "--menu") >= 0;
+        // Hidden: --pause-media pauses what's playing, as a game start would, then exits (testing).
+        if (Array.IndexOf(e.Args, "--pause-media") >= 0)
+        {
+            GameMediaPause.PauseAllAsync().ContinueWith(_ => Dispatcher.Invoke(Shutdown));
+            return;
+        }
         _single = new Mutex(true, @"Local\ApolloTray.SingleInstance", out var first);
         if (!first)
         {
@@ -59,7 +66,11 @@ public partial class App : Application
         ListenForSignal(ShowEvent, () => _flyout.Toggle());
         ListenForSignal(MenuEvent, ShowMenu);
 
-        _poll = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) => _ = PollAsync(), Dispatcher);
+        _poll = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) =>
+        {
+            _gameMedia.Check();
+            _ = PollAsync();
+        }, Dispatcher);
         UpdateTray();
         _ = PollAsync();
 
@@ -122,6 +133,8 @@ public partial class App : Application
         if (s.Live) items.Add(new("Disconnect", () => _ = EndAsync()));
         items.Add(new("Open Apollo settings", () => Process.Start(new ProcessStartInfo(ApolloApi.WebUi) { UseShellExecute = true })));
         items.Add(new("Show when a device connects", () => ShowOnConnect = !ShowOnConnect, Checked: ShowOnConnect, Radio: false));
+        items.Add(new("Pause media when a game starts", () => GameMediaPause.Enabled = !GameMediaPause.Enabled,
+            Checked: GameMediaPause.Enabled, Radio: false));
         if (!IsDevBuild) items.Add(new("Start with Windows", () => SetStartWithWindows(!StartsWithWindows), Checked: StartsWithWindows, Radio: false));
         items.Add(NativeMenu.Item.Separator);
         items.Add(new("Quit", Quit));

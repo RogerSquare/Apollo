@@ -127,6 +127,9 @@ right-click a native menu. Talks to Apollo only through the local token API abov
   in `/api/session`, placed per monitor in pixels), so it can be adjusted from the device; it closes
   after 15 s unless used. Toggle: menu > "Show when a device connects" (HKCU\Software\ApolloTray).
 - **Touch mode** tile (`touch_scale`): see below. The menu's Touch mode submenu picks the scale.
+- **Pause media when a game starts** (menu toggle, default on): when Steam's `RunningAppID` changes to
+  a game, everything playing in Windows' media controls (a browser video, Spotify) is paused. Works
+  streaming or not. `--pause-media` runs the pause once and exits (testing).
 - Menu: the same toggles, Disconnect, Open Apollo settings, Start with Windows, Quit.
 - Log: `%LOCALAPPDATA%\ApolloTray\apollotray.log`. Re-launching the exe opens the flyout; `--menu` opens the menu.
 
