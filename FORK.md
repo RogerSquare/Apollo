@@ -32,6 +32,22 @@ Toolchain known to work (2026-10): GCC 16.2, CMake 4.4, mingw-w64 15.
 - `config\` (sunshine.conf, apps.json, sunshine_state.json, credentials) is never touched.
 - Deploy log: `%ProgramData%\ApolloFork\deploy.log`.
 
+### Close the Steam game when the session ends
+
+The Steam app only launches Big Picture (`detached`), so a game started from it belongs to
+Steam and Apollo has nothing to terminate on quit. `scripts\fork\close-steam-game.ps1` reads
+Steam's `RunningAppID`, finds the game's install folder from the library manifests, and closes
+every process running from it (WM_CLOSE, then force after 8 s). Log:
+`%LOCALAPPDATA%\ApolloTray\close-steam-game.log`.
+
+```powershell
+.\scripts\fork\add-steam-close.ps1   # one-time, while not streaming: UAC, adds the undo command
+                                     # to the Steam app (backs up apps.json), restarts Apollo
+```
+
+It runs on quit (or on disconnect only if the app has terminate-on-pause), not on a plain
+disconnect, so a paused session can still be resumed into the game.
+
 ## Host policy (per-device display/audio automation)
 
 A global default plus optional per-client overrides decide what the host does while a client streams.

@@ -48,6 +48,8 @@ try {
     # assets: web UI + shaders + images. robocopy follows the shaders junction.
     robocopy (Join-Path $BuildDir 'assets') (Join-Path $InstallDir 'assets') /E /NFL /NDL /NJH /NJS | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "Asset copy failed (robocopy $LASTEXITCODE)" }
+    # Undo command for the Steam app: closes the game Big Picture started (see FORK.md).
+    Copy-Item (Join-Path $PSScriptRoot 'close-steam-game.ps1') (Join-Path $InstallDir 'scripts') -Force
 } finally {
     Log 'Starting ApolloService'
     Start-Service ApolloService
