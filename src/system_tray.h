@@ -83,4 +83,9 @@ namespace system_tray {
   void update_tray_paired(std::string device_name);
 
   void update_tray_client_connected(std::string client_name);
+
+  /**
+   * @brief The companion tray app polled just now (fork): mutes informational toasts for 10 s.
+   */
+  void note_companion_tray();
 }  // namespace system_tray
